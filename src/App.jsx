@@ -5,7 +5,7 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [cart, setCart] = useState([])  // { item, quantity, sweetness, ice }
 
-  const [discount, setDiscount] = useState(0)
+  const [discount, setDiscount] = useState(null)
   const [promoCode, setPromoCode] = useState('')
   const [promoMessage, setPromoMessage] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('cash')
@@ -15,7 +15,12 @@ export default function App() {
   const [sweetness, setSweetness] = useState('正常糖')
   const [ice, setIce] = useState('正常冰')
 
-  const promoOptions = { A: 10, B: 20, C: 30, D: 40 }
+  const promoOptions = {
+    A: { type: 'percent', value: 10 }, // 10% off
+    B: { type: 'percent', value: 20 }, // 20% off
+    C: { type: 'fixed', value: 20 },   // minus $20
+    D: { type: 'fixed', value: 30 }    // minus $30
+  }
 
   const menu = [
     { id: 1, name: 'Coffee', price: 50 },
@@ -76,21 +81,28 @@ export default function App() {
   const applyPromoCode = () => {
     const code = (promoCode || '').toString().trim().toUpperCase()
     if (!code) {
-      setDiscount(0)
+      setDiscount(null)
       setPromoMessage('請選擇折扣代碼')
       return
     }
-    if (promoOptions[code]) {
-      setDiscount(promoOptions[code])
-      setPromoMessage(`已套用折扣 ${code}：減 ${promoOptions[code]} 元`)
+    const opt = promoOptions[code]
+    if (opt) {
+      setDiscount(opt)
+      if (opt.type === 'percent') setPromoMessage(`已套用折扣 ${code}：${opt.value}% off`)
+      else setPromoMessage(`已套用折扣 ${code}：減 $${opt.value}`)
     } else {
-      setDiscount(0)
+      setDiscount(null)
       setPromoMessage('折扣代碼無效')
     }
   }
 
   const subtotal = cart.reduce((sum, entry) => sum + entry.item.price * entry.quantity, 0)
-  const total = Math.max(0, subtotal - Number(discount))
+  const discountAmount = (() => {
+    if (!discount) return 0
+    if (discount.type === 'percent') return Math.round(subtotal * (discount.value / 100))
+    return Number(discount.value) || 0
+  })()
+  const total = Math.max(0, subtotal - discountAmount)
 
   const submitOrder = async () => {
     if (cart.length === 0) { alert('購物車為空'); return }
@@ -106,8 +118,9 @@ export default function App() {
       user,
       items: itemsForPayload,
       subtotal,
-      discount: Number(discount),
-      promoCode: discount > 0 ? promoCode.trim().toUpperCase() : '',
+      discountAmount,
+      discountType: discount ? discount.type : null,
+      promoCode: discount ? promoCode.trim().toUpperCase() : '',
       total,
       paymentMethod,
       timestamp: new Date().toISOString()
