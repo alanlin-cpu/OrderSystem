@@ -176,7 +176,15 @@ export default function App() {
       setOrders((prev) => prev.filter((_, idx) => !indicesToSettle.includes(idx)))
     }
 
-    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} />
+    const handleSettleAllOrders = () => {
+      // archive all orders (including ones marked deleted) and clear the orders list
+      if (!orders || orders.length === 0) return
+      const all = [...orders]
+      setArchives((prev) => [...prev, { id: Date.now(), timestamp: new Date().toISOString(), orders: all }])
+      setOrders([])
+    }
+
+    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} />
   }
 
   // 菜單與購物車頁面

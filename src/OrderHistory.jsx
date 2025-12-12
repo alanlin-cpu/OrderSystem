@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 
-export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders }) {
+export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders }) {
   const [searchUser, setSearchUser] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
   const [settleOpen, setSettleOpen] = useState(false)
@@ -150,7 +150,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
         <div className="modal-overlay" onClick={() => setSettleOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{maxWidth:900}}>
             <h3>結算預覽</h3>
-            <p>有效訂單：{activeOrders.length} 筆</p>
+            <p>本次結算將處理所有訂單，共 {orders.length} 筆（包含已標記為已刪除的記錄）</p>
 
             {/* 1. 每樣產品販售數量 (忽略客製化) */}
             <div style={{display:'flex',gap:20,alignItems:'flex-start'}}>
@@ -220,7 +220,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
 
             <div style={{display:'flex',gap:12,justifyContent:'flex-end',marginTop:18}}>
               <button className="btn-cancel" onClick={() => setSettleOpen(false)}>取消</button>
-              <button className="btn-save" onClick={() => { onSettleOrders(activeIndices); setSettleOpen(false) }}>確認結算並刪除</button>
+              <button className="btn-save" onClick={() => { onSettleAllOrders && onSettleAllOrders(); setSettleOpen(false) }}>確認結算並刪除全部訂單</button>
             </div>
           </div>
         </div>
