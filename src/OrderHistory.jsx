@@ -156,7 +156,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
             <div style={{display:'flex',gap:20,alignItems:'flex-start'}}>
               <div style={{flex:1}}>
                 <h4>產品銷量</h4>
-                <table style={{width:'100%',marginBottom:12}}>
+                <table className="settle-table" style={{width:'100%',marginBottom:12}}>
                   <thead>
                     <tr><th>產品</th><th>數量</th></tr>
                   </thead>
@@ -193,7 +193,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
             {/* 2. 各支付方式統計、折扣總數、總收入 */}
             <div style={{marginTop:16}}>
               <h4>支付與金額彙總</h4>
-              <table style={{width:'100%'}}>
+              <table className="settle-summary" style={{width:'100%'}}>
                 <tbody>
                     {(() => {
                       const payTotals = {cash:0,card:0,linepay:0}
