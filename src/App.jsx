@@ -154,6 +154,7 @@ export default function App() {
   return (
     <div className="container">
       <h2 className="header">歡迎 {user}</h2>
+      <div className="debug">DEBUG: user={String(user)} subtotal={subtotal} items={cart.length} discountAmount={discount ? (discount.type==='percent'?Math.round(subtotal*(discount.value/100)):discount.value):0}</div>
 
       <div className="layout">
         {/* 左邊：格狀菜單 */}

@@ -281,6 +281,17 @@
   text-align: center;
 }
 
+/* Debug banner */
+.debug {
+  margin: 12px 0 20px 0;
+  padding: 8px 12px;
+  background: #222;
+  color: #fff;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
 .login-container input {
   width: 100%;
   padding: 14px;
