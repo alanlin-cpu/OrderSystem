@@ -131,7 +131,7 @@ export default function App() {
       await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       alert('已送出訂單!')
       setCart([])
-      setDiscount(0)
+      setDiscount(null)
       setPromoCode('')
       setPromoMessage('')
     } catch (err) {
@@ -204,14 +204,16 @@ export default function App() {
               <label>折扣代碼</label>
               <select value={promoCode} onChange={(e) => setPromoCode(e.target.value)}>
                 <option value="">-- 選擇 --</option>
-                {Object.keys(promoOptions).map(code => (
-                  <option key={code} value={code}>{code} - 減 {promoOptions[code]} 元</option>
-                ))}
+                {Object.keys(promoOptions).map(code => {
+                  const opt = promoOptions[code]
+                  const desc = opt.type === 'percent' ? `${opt.value}% off` : `減 $${opt.value}`
+                  return <option key={code} value={code}>{code} - {desc}</option>
+                })}
               </select>
               <button className="btn-apply" type="button" onClick={applyPromoCode}>套用</button>
             </div>
             {promoMessage && (
-              <div className={`message ${discount > 0 ? 'success' : 'error'}`}>{promoMessage}</div>
+              <div className={`message ${discount ? 'success' : 'error'}`}>{promoMessage}</div>
             )}
 
             <div className="form-row">
