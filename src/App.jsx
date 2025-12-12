@@ -131,8 +131,10 @@ export default function App() {
     }
 
     try {
-      const GAS_URL = 'YOUR_GOOGLE_APP_SCRIPT_URL'
-      await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const GAS_URL = 'https://script.google.com/macros/s/AKfycbx5eKo1NLrJU13IXQQ0D1hfLClAFYkPxv0IM9MTiQp_b1cxAfy5B8IVPj-yVvY57dlQ/exec'
+      const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error((json && json.message) || res.statusText || '送單失敗')
       alert('已送出訂單!')
       setOrders((prev) => [...prev, payload])
       setCart([])
@@ -140,8 +142,8 @@ export default function App() {
       setPromoCode('')
       setPromoMessage('')
     } catch (err) {
-    console.error(err)
-      alert('送單失敗，請檢查網路/後端設定')
+      console.error(err)
+      alert('送單失敗，請檢查網路/後端設定：' + (err.message || err))
     }
   }
 
