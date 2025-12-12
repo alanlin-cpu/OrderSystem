@@ -212,8 +212,10 @@
   background: white;
   padding: 32px;
   border-radius: 16px;
-  width: 90%;
-  max-width: 480px;
+  width: 95%;
+  max-width: 960px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
   box-shadow: 0 15px 40px rgba(0,0,0,0.3);
   text-align: center;
 }
@@ -407,6 +409,27 @@
 .modal .bar-chart { max-height: 220px; overflow: auto }
 .modal h3, .modal h4 { margin: 0 0 12px 0 }
 .modal p { margin: 6px 0 16px 0; color: #555 }
+
+/* settle modal layout */
+.settle-body {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.settle-left { flex: 1; min-width: 260px }
+.settle-right { width: 320px; flex-shrink: 0 }
+
+/* settle table polish */
+.settle-table thead th { background: #fafafa; font-weight: 700 }
+.settle-table tbody tr:nth-child(odd) { background: #fff }
+.settle-table tbody tr:nth-child(even) { background: #fbfbfb }
+.settle-table td, .settle-table th { border: 1px solid #efefef }
+.settle-table { box-shadow: none }
+
+/* make bar labels wrap and align */
+.bar-row { display:flex; align-items:center; gap:8px }
+.bar-label { width:110px; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 
 /* bar chart */
 .bar-chart { display:flex; flex-direction:column; gap:8px }

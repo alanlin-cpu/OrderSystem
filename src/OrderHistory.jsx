@@ -148,13 +148,13 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
       {/* 結算 Modal */}
       {settleOpen && (
         <div className="modal-overlay" onClick={() => setSettleOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{maxWidth:900}}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3>結算預覽</h3>
             <p>本次結算將處理所有訂單，共 {orders.length} 筆（包含已標記為已刪除的記錄）</p>
 
             {/* 1. 每樣產品販售數量 (忽略客製化) */}
-            <div style={{display:'flex',gap:20,alignItems:'flex-start'}}>
-              <div style={{flex:1}}>
+            <div className="settle-body">
+              <div className="settle-left">
                 <h4>產品銷量</h4>
                 <table className="settle-table" style={{width:'100%',marginBottom:12}}>
                   <thead>
@@ -171,7 +171,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                   </tbody>
                 </table>
               </div>
-              <div style={{width:300}}>
+              <div className="settle-right">
                 <h4>銷量柱狀圖</h4>
                 <div className="bar-chart">
                   {(() => {
