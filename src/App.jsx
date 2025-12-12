@@ -1,33 +1,26 @@
 import React, { useState } from 'react'
-import './App.css'  // 導入 CSS
+import './App.css'
 
 export default function App() {
   const [user, setUser] = useState(null)
+  
+  // 購物車改成物件陣列：{ item, quantity }
   const [cart, setCart] = useState([])
+  
   const [discount, setDiscount] = useState(0)
   const [promoCode, setPromoCode] = useState('')
   const [promoMessage, setPromoMessage] = useState('')
-  const [promoAppliedAmount, setPromoAppliedAmount] = useState(0)
   const [paymentMethod, setPaymentMethod] = useState('cash')
 
   const validCodes = { SAVE10: 10, SAVE20: 20 }
 
-  const applyPromoCode = () => {
-    const code = promoCode.trim().toUpperCase()
-    if (validCodes[code]) {
-      setPromoAppliedAmount(validCodes[code])
-      setPromoMessage(`已套用折扣碼 ${code}：減 ${validCodes[code]} 元`)
-      setDiscount(validCodes[code])
-    } else {
-      setPromoAppliedAmount(0)
-      setPromoMessage('折扣碼無效')
-    }
-  }
-
   const menu = [
     { id: 1, name: 'Coffee', price: 50 },
     { id: 2, name: 'Tea', price: 40 },
-    { id: 3, name: 'Sandwich', price: 80 }
+    { id: 3, name: 'Sandwich', price: 80 },
+    { id: 4, name: 'Latte', price: 70 },
+    { id: 5, name: 'Cake', price: 60 },
+    { id: 6, name: 'Juice', price: 55 }
   ]
 
   const handleLogin = (e) => {
@@ -38,21 +31,66 @@ export default function App() {
     else alert('請輸入帳號和密碼')
   }
 
-  const addToCart = (item) => setCart((prev) => [...prev, item])
-  const removeFromCart = (index) => setCart((prev) => prev.filter((_, i) => i !== index))
+  // 加入購物車：同品項則增加數量
+  const addToCart = (item) => {
+    setCart((prev) => {
+      const existing = prev.find(entry => entry.item.id === item.id)
+      if (existing) {
+        return prev.map(entry =>
+          entry.item.id === item.id
+            ? { ...entry, quantity: entry.quantity + 1 }
+            : entry
+        )
+      }
+      return [...prev, { item, quantity: 1 }]
+    })
+  }
 
-  const subtotal = cart.reduce((s, it) => s + it.price, 0)
-  const total = Math.max(0, subtotal - Number(discount || 0))
+  // 改變數量
+  const updateQuantity = (id, delta) => {
+    setCart((prev) => {
+      return prev
+        .map(entry => 
+          entry.item.id === id
+            ? { ...entry, quantity: entry.quantity + delta }
+            : entry
+        )
+        .filter(entry => entry.quantity > 0)  // 自動移除 quantity <= 0 的項目
+    })
+  }
+
+  const applyPromoCode = () => {
+    const code = promoCode.trim().toUpperCase()
+    if (validCodes[code]) {
+      setDiscount(validCodes[code])
+      setPromoMessage(`已套用折扣碼 ${code}：減 ${validCodes[code]} 元`)
+    } else {
+      setDiscount(0)
+      setPromoMessage('折扣碼無效')
+    }
+  }
+
+  // 計算小計與總計
+  const subtotal = cart.reduce((sum, entry) => sum + entry.item.price * entry.quantity, 0)
+  const total = Math.max(0, subtotal - Number(discount))
 
   const submitOrder = async () => {
-    if (!cart.length) { alert('購物車為空'); return }
+    if (cart.length === 0) {
+      alert('購物車為空')
+      return
+    }
+
+    const itemsForPayload = cart.map(entry => ({
+      ...entry.item,
+      quantity: entry.quantity
+    }))
 
     const payload = {
       user,
-      items: cart,
+      items: itemsForPayload,
       subtotal,
-      discount: Number(discount || 0),
-      promoCode: promoAppliedAmount ? promoCode.trim().toUpperCase() : '',
+      discount: Number(discount),
+      promoCode: discount > 0 ? promoCode.trim().toUpperCase() : '',
       total,
       paymentMethod,
       timestamp: new Date().toISOString()
@@ -60,12 +98,15 @@ export default function App() {
 
     try {
       const GAS_URL = 'YOUR_GOOGLE_APP_SCRIPT_URL'
-      await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
       alert('已送出訂單!')
       setCart([])
       setDiscount(0)
       setPromoCode('')
-      setPromoAppliedAmount(0)
       setPromoMessage('')
     } catch (err) {
       console.error(err)
@@ -89,17 +130,18 @@ export default function App() {
       <h2 className="header">歡迎 {user}</h2>
 
       <div className="layout">
-        {/* 左邊：菜單 */}
+        {/* 左邊：格狀菜單 */}
         <div className="column">
           <h3 className="section-title">菜單</h3>
-          <ul className="menu-list">
+          <div className="menu-grid">
             {menu.map(item => (
-              <li key={item.id} className="menu-item">
-                <span>{item.name} - ${item.price}</span>
-                <button className="btn-add" onClick={() => addToCart(item)}>加入</button>
-              </li>
+              <div key={item.id} className="menu-card" onClick={() => addToCart(item)}>
+                <div className="menu-card-name">{item.name}</div>
+                <div className="menu-card-price">${item.price}</div>
+                <button className="btn-add">加入購物車</button>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
 
         {/* 右邊：購物車 */}
@@ -109,10 +151,24 @@ export default function App() {
             <div className="empty-cart">購物車為空</div>
           ) : (
             <ul className="cart-list">
-              {cart.map((it, i) => (
-                <li key={i} className="cart-item">
-                  <span>{it.name} - ${it.price}</span>
-                  <button className="btn-remove" onClick={() => removeFromCart(i)}>移除</button>
+              {cart.map((entry) => (
+                <li key={entry.item.id} className="cart-item">
+                  <span>{entry.item.name} - ${entry.item.price} × {entry.quantity}</span>
+                  <div className="quantity-controls">
+                    <button
+                      className="quantity-btn quantity-btn-minus"
+                      onClick={() => updateQuantity(entry.item.id, -1)}
+                    >
+                      −
+                    </button>
+                    <span className="quantity">{entry.quantity}</span>
+                    <button
+                      className="quantity-btn quantity-btn-plus"
+                      onClick={() => updateQuantity(entry.item.id, 1)}
+                    >
+                      +
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
