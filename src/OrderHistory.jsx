@@ -1,47 +1,25 @@
 import React, { useState } from 'react'
 
-export default function OrderHistory({ orders, onBack, onUpdateOrder, onDeleteOrder }) {
+export default function OrderHistory({ orders, onBack, onDeleteOrder }) {
   const [searchUser, setSearchUser] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
-  const [editingIndex, setEditingIndex] = useState(null)
-  const [editedOrder, setEditedOrder] = useState(null)
 
-  // 篩選訂單
+  // 篩選訂單（只顯示未刪除的訂單搜尋結果，但表格顯示所有訂單）
   const filtered = orders.filter(order => {
     const userMatch = !searchUser || order.user.toLowerCase().includes(searchUser.toLowerCase())
     const paymentMatch = !filterPayment || order.paymentMethod === filterPayment
     return userMatch && paymentMatch
   })
 
-  // 開始編輯
-  const startEdit = (index) => {
-    const actualIndex = orders.findIndex((o, i) => filtered[index] === o)
-    setEditingIndex(actualIndex)
-    setEditedOrder(JSON.parse(JSON.stringify(orders[actualIndex])))
-  }
-
-  // 保存編輯
-  const saveEdit = () => {
-    if (editingIndex !== null && editedOrder) {
-      onUpdateOrder(editingIndex, editedOrder)
-      setEditingIndex(null)
-      setEditedOrder(null)
-    }
-  }
-
-  // 取消編輯
-  const cancelEdit = () => {
-    setEditingIndex(null)
-    setEditedOrder(null)
-  }
-
-  // 刪除訂單
+  // 刪除訂單（軟刪除，標記為已刪除）
   const deleteOrder = (index) => {
-    if (confirm('確定要刪除此訂單？')) {
-      const actualIndex = orders.findIndex((o, i) => filtered[index] === o)
-      onDeleteOrder(actualIndex)
+    if (confirm('確定要刪除此訂單？此訂單記錄將保留但顯示為已刪除')) {
+      onDeleteOrder(index)
     }
   }
+
+  // 統計：只計算未刪除的訂單
+  const activeOrders = filtered.filter(o => !o.deleted)
 
   return (
     <div className="order-history-container">
@@ -71,7 +49,7 @@ export default function OrderHistory({ orders, onBack, onUpdateOrder, onDeleteOr
           </select>
         </div>
         <div className="filter-result">
-          共 {filtered.length} 筆訂單
+          共 {filtered.length} 筆記錄 ({activeOrders.length} 筆有效訂單)
         </div>
       </div>
 
@@ -94,134 +72,63 @@ export default function OrderHistory({ orders, onBack, onUpdateOrder, onDeleteOr
               </tr>
             </thead>
             <tbody>
-              {filtered.map((order, idx) => {
-                const isEditing = editingIndex === orders.indexOf(order)
-                const displayOrder = isEditing ? editedOrder : order
-                return (
-                  <tr key={idx} className={`order-row ${isEditing ? 'editing' : ''}`}>
-                    <td className="time">{new Date(displayOrder.timestamp).toLocaleString('zh-TW')}</td>
-                    <td className="user">{displayOrder.user}</td>
-                    <td className="items">
-                      <details>
-                        <summary>{displayOrder.items.length} 項</summary>
-                        <ul className="item-details">
-                          {displayOrder.items.map((item, i) => (
-                            <li key={i}>
-                              {item.name} × {item.quantity} (${item.price * item.quantity})
-                              {item.sweetness && <span className="option"> • {item.sweetness}</span>}
-                              {item.ice && <span className="option"> • {item.ice}</span>}
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    </td>
-                    <td className="subtotal">
-                      {isEditing ? (
-                        <input 
-                          type="number" 
-                          value={editedOrder.subtotal} 
-                          onChange={(e) => setEditedOrder({...editedOrder, subtotal: Number(e.target.value)})}
-                          className="edit-input"
-                        />
-                      ) : (
-                        `$${displayOrder.subtotal}`
-                      )}
-                    </td>
-                    <td className="discount">
-                      {isEditing ? (
-                        <div className="edit-discount">
-                          <input 
-                            type="number" 
-                            value={editedOrder.discountAmount} 
-                            onChange={(e) => setEditedOrder({...editedOrder, discountAmount: Number(e.target.value)})}
-                            className="edit-input"
-                            placeholder="折扣金額"
-                          />
-                          <select 
-                            value={editedOrder.promoCode || ''} 
-                            onChange={(e) => setEditedOrder({...editedOrder, promoCode: e.target.value})}
-                            className="edit-input"
-                          >
-                            <option value="">無</option>
-                            <option value="A">A</option>
-                            <option value="B">B</option>
-                            <option value="C">C</option>
-                            <option value="D">D</option>
-                          </select>
-                        </div>
-                      ) : (
-                        (displayOrder.discountAmount > 0 ? (
-                          <span className="discount-badge">
-                            -${displayOrder.discountAmount}
-                            {displayOrder.promoCode && ` (${displayOrder.promoCode})`}
-                          </span>
-                        ) : (
-                          '-'
-                        ))
-                      )}
-                    </td>
-                    <td className="total">
-                      {isEditing ? (
-                        <input 
-                          type="number" 
-                          value={editedOrder.total} 
-                          onChange={(e) => setEditedOrder({...editedOrder, total: Number(e.target.value)})}
-                          className="edit-input"
-                        />
-                      ) : (
-                        `$${displayOrder.total}`
-                      )}
-                    </td>
-                    <td className="payment">
-                      {isEditing ? (
-                        <select 
-                          value={editedOrder.paymentMethod} 
-                          onChange={(e) => setEditedOrder({...editedOrder, paymentMethod: e.target.value})}
-                          className="edit-input"
-                        >
-                          <option value="cash">現金</option>
-                          <option value="card">信用卡</option>
-                          <option value="linepay">Line Pay</option>
-                        </select>
-                      ) : (
-                        (displayOrder.paymentMethod === 'cash' ? '現金' : displayOrder.paymentMethod === 'card' ? '信用卡' : 'Line Pay')
-                      )}
-                    </td>
-                    <td className="actions">
-                      {isEditing ? (
-                        <>
-                          <button className="btn-save" onClick={saveEdit}>✓ 保存</button>
-                          <button className="btn-cancel" onClick={cancelEdit}>✗ 取消</button>
-                        </>
-                      ) : (
-                        <>
-                          <button className="btn-edit" onClick={() => startEdit(idx)}>✎ 編輯</button>
-                          <button className="btn-delete" onClick={() => deleteOrder(idx)}>🗑 刪除</button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
+              {filtered.map((order, idx) => (
+                <tr key={idx} className={`order-row ${order.deleted ? 'deleted' : ''}`}>
+                  <td className="time">{new Date(order.timestamp).toLocaleString('zh-TW')}</td>
+                  <td className="user">{order.user} {order.deleted && <span className="deleted-badge">【已刪除】</span>}</td>
+                  <td className="items">
+                    <details>
+                      <summary>{order.items.length} 項</summary>
+                      <ul className="item-details">
+                        {order.items.map((item, i) => (
+                          <li key={i}>
+                            {item.name} × {item.quantity} (${item.price * item.quantity})
+                            {item.sweetness && <span className="option"> • {item.sweetness}</span>}
+                            {item.ice && <span className="option"> • {item.ice}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  </td>
+                  <td className="subtotal">${order.subtotal}</td>
+                  <td className="discount">
+                    {order.discountAmount > 0 ? (
+                      <span className="discount-badge">
+                        -${order.discountAmount}
+                        {order.promoCode && ` (${order.promoCode})`}
+                      </span>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                  <td className="total">${order.total}</td>
+                  <td className="payment">{order.paymentMethod === 'cash' ? '現金' : order.paymentMethod === 'card' ? '信用卡' : 'Line Pay'}</td>
+                  <td className="actions">
+                    {!order.deleted && (
+                      <button className="btn-delete" onClick={() => deleteOrder(idx)}>🗑 刪除</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       )}
 
       {/* 統計 */}
-      {filtered.length > 0 && (
+      {activeOrders.length > 0 && (
         <div className="order-stats">
           <div className="stat-item">
             <span className="stat-label">總收入</span>
-            <span className="stat-value">${filtered.reduce((sum, o) => sum + o.total, 0)}</span>
+            <span className="stat-value">${activeOrders.reduce((sum, o) => sum + o.total, 0)}</span>
           </div>
           <div className="stat-item">
             <span className="stat-label">總折扣</span>
-            <span className="stat-value">-${filtered.reduce((sum, o) => sum + o.discountAmount, 0)}</span>
+            <span className="stat-value">-${activeOrders.reduce((sum, o) => sum + o.discountAmount, 0)}</span>
           </div>
           <div className="stat-item">
             <span className="stat-label">訂單數</span>
-            <span className="stat-value">{filtered.length}</span>
+            <span className="stat-value">{activeOrders.length}</span>
           </div>
         </div>
       )}
