@@ -1,16 +1,15 @@
 import React, { useState } from 'react'
+import './App.css'  // 導入 CSS
 
 export default function App() {
   const [user, setUser] = useState(null)
   const [cart, setCart] = useState([])
-
-  // numeric discount (kept for compatibility with tests)
   const [discount, setDiscount] = useState(0)
-
-  // promo code logic
   const [promoCode, setPromoCode] = useState('')
   const [promoMessage, setPromoMessage] = useState('')
   const [promoAppliedAmount, setPromoAppliedAmount] = useState(0)
+  const [paymentMethod, setPaymentMethod] = useState('cash')
+
   const validCodes = { SAVE10: 10, SAVE20: 20 }
 
   const applyPromoCode = () => {
@@ -24,8 +23,6 @@ export default function App() {
       setPromoMessage('折扣碼無效')
     }
   }
-
-  const [paymentMethod, setPaymentMethod] = useState('cash')
 
   const menu = [
     { id: 1, name: 'Coffee', price: 50 },
@@ -62,7 +59,7 @@ export default function App() {
     }
 
     try {
-      const GAS_URL = 'YOUR_GOOGLE_APP_SCRIPT_URL' // replace with your GAS web app URL
+      const GAS_URL = 'YOUR_GOOGLE_APP_SCRIPT_URL'
       await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       alert('已送出訂單!')
       setCart([])
@@ -77,68 +74,84 @@ export default function App() {
   }
 
   if (!user) return (
-    <div style={{ padding: 20 }}>
+    <div className="login-container">
       <h2>員工登入</h2>
       <form onSubmit={handleLogin}>
-        <div><input name="username" placeholder="帳號" required /></div>
-        <div><input name="password" type="password" placeholder="密碼" required /></div>
-        <div style={{ marginTop: 8 }}><button type="submit">登入</button></div>
+        <input name="username" placeholder="帳號" required />
+        <input name="password" type="password" placeholder="密碼" required />
+        <button type="submit">登入</button>
       </form>
     </div>
   )
 
   return (
-    <div style={{ padding: 20, maxWidth: 800 }}>
-      <h2>歡迎 {user}</h2>
+    <div className="container">
+      <h2 className="header">歡迎 {user}</h2>
 
-      <section>
-        <h3>菜單</h3>
-        <ul>
-          {menu.map(item => (
-            <li key={item.id} style={{ marginBottom: 6 }}>
-              {item.name} - ${item.price}
-              <button style={{ marginLeft: 8 }} onClick={() => addToCart(item)}>加入</button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section style={{ marginTop: 16 }}>
-        <h3>目前餐點 (購物車)</h3>
-        {cart.length === 0 ? <div>購物車為空</div> : (
-          <ul>
-            {cart.map((it, i) => (
-              <li key={i} style={{ marginBottom: 6 }}>{it.name} - ${it.price}
-                <button style={{ marginLeft: 8 }} onClick={() => removeFromCart(i)}>移除</button>
+      <div className="layout">
+        {/* 左邊：菜單 */}
+        <div className="column">
+          <h3 className="section-title">菜單</h3>
+          <ul className="menu-list">
+            {menu.map(item => (
+              <li key={item.id} className="menu-item">
+                <span>{item.name} - ${item.price}</span>
+                <button className="btn-add" onClick={() => addToCart(item)}>加入</button>
               </li>
             ))}
           </ul>
-        )}
-
-        <div style={{ marginTop: 12 }}>
-          <div>小計: ${subtotal}</div>
-
-          <div style={{ marginTop: 6 }}>折扣 (數字): <input value={discount} onChange={(e) => setDiscount(e.target.value)} type="number" min="0" /></div>
-
-          <div style={{ marginTop: 6 }}>
-            折扣碼: <input value={promoCode} onChange={(e) => setPromoCode(e.target.value)} placeholder="輸入折扣碼如 SAVE10" />
-            <button onClick={applyPromoCode} style={{ marginLeft: 8 }}>套用折扣碼</button>
-            {promoMessage && <div style={{ marginTop: 6 }}>{promoMessage}</div>}
-          </div>
-
-          <div style={{ marginTop: 6 }}>支付方式: 
-            <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-              <option value="cash">現金</option>
-              <option value="card">信用卡</option>
-              <option value="mobile">行動支付</option>
-            </select>
-          </div>
-
-          <div style={{ marginTop: 6 }}>總計: <strong>${total}</strong></div>
-
-          <div style={{ marginTop: 12 }}><button onClick={submitOrder}>送出訂單</button></div>
         </div>
-      </section>
+
+        {/* 右邊：購物車 */}
+        <div className="column">
+          <h3 className="section-title">目前餐點 (購物車)</h3>
+          {cart.length === 0 ? (
+            <div className="empty-cart">購物車為空</div>
+          ) : (
+            <ul className="cart-list">
+              {cart.map((it, i) => (
+                <li key={i} className="cart-item">
+                  <span>{it.name} - ${it.price}</span>
+                  <button className="btn-remove" onClick={() => removeFromCart(i)}>移除</button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="checkout-box">
+            <div>小計: ${subtotal}</div>
+
+            <div className="form-row">
+              <label>折扣 (數字):</label>
+              <input value={discount} onChange={(e) => setDiscount(e.target.value)} type="number" min="0" />
+            </div>
+
+            <div className="form-row">
+              <label>折扣碼:</label>
+              <input value={promoCode} onChange={(e) => setPromoCode(e.target.value)} placeholder="如 SAVE10" />
+              <button className="btn-apply" onClick={applyPromoCode}>套用</button>
+            </div>
+            {promoMessage && (
+              <div className={`message ${promoMessage.includes('無效') ? 'error' : 'success'}`}>
+                {promoMessage}
+              </div>
+            )}
+
+            <div className="form-row">
+              <label>支付方式:</label>
+              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+                <option value="cash">現金</option>
+                <option value="card">信用卡</option>
+                <option value="mobile">行動支付</option>
+              </select>
+            </div>
+
+            <div className="total">總計: ${total}</div>
+
+            <button className="btn-submit" onClick={submitOrder}>送出訂單</button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
