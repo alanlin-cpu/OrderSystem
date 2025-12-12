@@ -1,9 +1,12 @@
 import React, { useState } from 'react'
 import './App.css'
+import OrderHistory from './OrderHistory'
 
 export default function App() {
   const [user, setUser] = useState(null)
   const [cart, setCart] = useState([])  // { item, quantity, sweetness, ice }
+  const [orders, setOrders] = useState([])
+  const [currentPage, setCurrentPage] = useState('menu') // 'menu' or 'history'
 
   const [discount, setDiscount] = useState(null)
   const [promoCode, setPromoCode] = useState('')
@@ -130,6 +133,7 @@ export default function App() {
       const GAS_URL = 'YOUR_GOOGLE_APP_SCRIPT_URL'
       await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       alert('已送出訂單!')
+      setOrders((prev) => [...prev, payload])
       setCart([])
       setDiscount(null)
       setPromoCode('')
@@ -151,10 +155,17 @@ export default function App() {
     </div>
   )
 
+  // 訂單記錄頁面
+  if (currentPage === 'history') {
+    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} />
+  }
+
+  // 菜單與購物車頁面
   return (
     <div className="container">
       <h2 className="header">歡迎 {user}</h2>
       <div className="debug">DEBUG: user={String(user)} subtotal={subtotal} items={cart.length} discountAmount={discount ? (discount.type==='percent'?Math.round(subtotal*(discount.value/100)):discount.value):0}</div>
+      <button className="btn-nav-history" onClick={() => setCurrentPage('history')}>📋 訂單記錄</button>
 
       <div className="layout">
         {/* 左邊：格狀菜單 */}
