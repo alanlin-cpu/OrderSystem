@@ -161,7 +161,7 @@ export default function App() {
     const handleDeleteOrder = (index) => {
       setOrders((prev) => {
         const newOrders = [...prev]
-        newOrders[index] = { ...newOrders[index], deleted: true }
+        newOrders[index] = { ...newOrders[index], deleted: true, deletedBy: user, deletedAt: new Date().toISOString() }
         return newOrders
       })
     }
