@@ -15,7 +15,7 @@ export default function App() {
   const [sweetness, setSweetness] = useState('正常糖')
   const [ice, setIce] = useState('正常冰')
 
-  const validCodes = { SAVE10: 10, SAVE20: 20 }
+  const promoOptions = { A: 10, B: 20, C: 30, D: 40 }
 
   const menu = [
     { id: 1, name: 'Coffee', price: 50 },
@@ -74,13 +74,18 @@ export default function App() {
   }
 
   const applyPromoCode = () => {
-    const code = promoCode.trim().toUpperCase()
-    if (validCodes[code]) {
-      setDiscount(validCodes[code])
-      setPromoMessage(`已套用折扣碼 ${code}：減 ${validCodes[code]} 元`)
+    const code = (promoCode || '').toString().trim().toUpperCase()
+    if (!code) {
+      setDiscount(0)
+      setPromoMessage('請選擇折扣代碼')
+      return
+    }
+    if (promoOptions[code]) {
+      setDiscount(promoOptions[code])
+      setPromoMessage(`已套用折扣 ${code}：減 ${promoOptions[code]} 元`)
     } else {
       setDiscount(0)
-      setPromoMessage('折扣碼無效')
+      setPromoMessage('折扣代碼無效')
     }
   }
 
@@ -178,10 +183,32 @@ export default function App() {
             </ul>
           )}
 
-          {/* 結帳區塊保持不變 */}
           <div className="checkout-box">
             <div>小計: ${subtotal}</div>
-            {/* ... 其他結帳內容 ... */}
+
+            <div className="form-row">
+              <label>折扣代碼</label>
+              <select value={promoCode} onChange={(e) => setPromoCode(e.target.value)}>
+                <option value="">-- 選擇 --</option>
+                {Object.keys(promoOptions).map(code => (
+                  <option key={code} value={code}>{code} - 減 {promoOptions[code]} 元</option>
+                ))}
+              </select>
+              <button className="btn-apply" type="button" onClick={applyPromoCode}>套用</button>
+            </div>
+            {promoMessage && (
+              <div className={`message ${discount > 0 ? 'success' : 'error'}`}>{promoMessage}</div>
+            )}
+
+            <div className="form-row">
+              <label>付款方式</label>
+              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+                <option value="cash">現金</option>
+                <option value="card">信用卡</option>
+                <option value="linepay">Line Pay</option>
+              </select>
+            </div>
+
             <div className="total">總計: ${total}</div>
             <button className="btn-submit" onClick={submitOrder}>送出訂單</button>
           </div>
