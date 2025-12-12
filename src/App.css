@@ -486,6 +486,87 @@
   text-align: center;
 }
 
+/* 編輯模式 */
+.orders-table tr.editing {
+  background: #fff9e6;
+}
+
+.edit-input {
+  padding: 6px 10px;
+  border: 1px solid #2196f3;
+  border-radius: 4px;
+  font-size: 0.9em;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.edit-discount {
+  display: flex;
+  gap: 6px;
+  flex-direction: column;
+}
+
+.edit-discount input,
+.edit-discount select {
+  padding: 6px 10px;
+  border: 1px solid #2196f3;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.btn-edit, .btn-delete, .btn-save, .btn-cancel {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.btn-edit {
+  background: #2196f3;
+  color: white;
+}
+
+.btn-edit:hover {
+  background: #1976d2;
+}
+
+.btn-delete {
+  background: #f44336;
+  color: white;
+}
+
+.btn-delete:hover {
+  background: #da190b;
+}
+
+.btn-save {
+  background: #4caf50;
+  color: white;
+}
+
+.btn-save:hover {
+  background: #388e3c;
+}
+
+.btn-cancel {
+  background: #999;
+  color: white;
+}
+
+.btn-cancel:hover {
+  background: #666;
+}
+
+
 .empty-orders {
   text-align: center;
   padding: 60px 20px;

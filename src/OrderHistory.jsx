@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
 
-export default function OrderHistory({ orders, onBack }) {
+export default function OrderHistory({ orders, onBack, onUpdateOrder, onDeleteOrder }) {
   const [searchUser, setSearchUser] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
+  const [editingIndex, setEditingIndex] = useState(null)
+  const [editedOrder, setEditedOrder] = useState(null)
 
   // 篩選訂單
   const filtered = orders.filter(order => {
@@ -10,6 +12,36 @@ export default function OrderHistory({ orders, onBack }) {
     const paymentMatch = !filterPayment || order.paymentMethod === filterPayment
     return userMatch && paymentMatch
   })
+
+  // 開始編輯
+  const startEdit = (index) => {
+    const actualIndex = orders.findIndex((o, i) => filtered[index] === o)
+    setEditingIndex(actualIndex)
+    setEditedOrder(JSON.parse(JSON.stringify(orders[actualIndex])))
+  }
+
+  // 保存編輯
+  const saveEdit = () => {
+    if (editingIndex !== null && editedOrder) {
+      onUpdateOrder(editingIndex, editedOrder)
+      setEditingIndex(null)
+      setEditedOrder(null)
+    }
+  }
+
+  // 取消編輯
+  const cancelEdit = () => {
+    setEditingIndex(null)
+    setEditedOrder(null)
+  }
+
+  // 刪除訂單
+  const deleteOrder = (index) => {
+    if (confirm('確定要刪除此訂單？')) {
+      const actualIndex = orders.findIndex((o, i) => filtered[index] === o)
+      onDeleteOrder(actualIndex)
+    }
+  }
 
   return (
     <div className="order-history-container">
@@ -58,42 +90,119 @@ export default function OrderHistory({ orders, onBack }) {
                 <th>折扣</th>
                 <th>總計</th>
                 <th>付款</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((order, idx) => (
-                <tr key={idx} className="order-row">
-                  <td className="time">{new Date(order.timestamp).toLocaleString('zh-TW')}</td>
-                  <td className="user">{order.user}</td>
-                  <td className="items">
-                    <details>
-                      <summary>{order.items.length} 項</summary>
-                      <ul className="item-details">
-                        {order.items.map((item, i) => (
-                          <li key={i}>
-                            {item.name} × {item.quantity} (${item.price * item.quantity})
-                            {item.sweetness && <span className="option"> • {item.sweetness}</span>}
-                            {item.ice && <span className="option"> • {item.ice}</span>}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  </td>
-                  <td className="subtotal">${order.subtotal}</td>
-                  <td className="discount">
-                    {order.discountAmount > 0 ? (
-                      <span className="discount-badge">
-                        -{order.discountType === 'percent' ? `${Math.round(order.discountAmount / order.subtotal * 100)}%` : `$${order.discountAmount}`}
-                        {order.promoCode && ` (${order.promoCode})`}
-                      </span>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td className="total">${order.total}</td>
-                  <td className="payment">{order.paymentMethod === 'cash' ? '現金' : order.paymentMethod === 'card' ? '信用卡' : 'Line Pay'}</td>
-                </tr>
-              ))}
+              {filtered.map((order, idx) => {
+                const isEditing = editingIndex === orders.indexOf(order)
+                const displayOrder = isEditing ? editedOrder : order
+                return (
+                  <tr key={idx} className={`order-row ${isEditing ? 'editing' : ''}`}>
+                    <td className="time">{new Date(displayOrder.timestamp).toLocaleString('zh-TW')}</td>
+                    <td className="user">{displayOrder.user}</td>
+                    <td className="items">
+                      <details>
+                        <summary>{displayOrder.items.length} 項</summary>
+                        <ul className="item-details">
+                          {displayOrder.items.map((item, i) => (
+                            <li key={i}>
+                              {item.name} × {item.quantity} (${item.price * item.quantity})
+                              {item.sweetness && <span className="option"> • {item.sweetness}</span>}
+                              {item.ice && <span className="option"> • {item.ice}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    </td>
+                    <td className="subtotal">
+                      {isEditing ? (
+                        <input 
+                          type="number" 
+                          value={editedOrder.subtotal} 
+                          onChange={(e) => setEditedOrder({...editedOrder, subtotal: Number(e.target.value)})}
+                          className="edit-input"
+                        />
+                      ) : (
+                        `$${displayOrder.subtotal}`
+                      )}
+                    </td>
+                    <td className="discount">
+                      {isEditing ? (
+                        <div className="edit-discount">
+                          <input 
+                            type="number" 
+                            value={editedOrder.discountAmount} 
+                            onChange={(e) => setEditedOrder({...editedOrder, discountAmount: Number(e.target.value)})}
+                            className="edit-input"
+                            placeholder="折扣金額"
+                          />
+                          <select 
+                            value={editedOrder.promoCode || ''} 
+                            onChange={(e) => setEditedOrder({...editedOrder, promoCode: e.target.value})}
+                            className="edit-input"
+                          >
+                            <option value="">無</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                          </select>
+                        </div>
+                      ) : (
+                        (displayOrder.discountAmount > 0 ? (
+                          <span className="discount-badge">
+                            -${displayOrder.discountAmount}
+                            {displayOrder.promoCode && ` (${displayOrder.promoCode})`}
+                          </span>
+                        ) : (
+                          '-'
+                        ))
+                      )}
+                    </td>
+                    <td className="total">
+                      {isEditing ? (
+                        <input 
+                          type="number" 
+                          value={editedOrder.total} 
+                          onChange={(e) => setEditedOrder({...editedOrder, total: Number(e.target.value)})}
+                          className="edit-input"
+                        />
+                      ) : (
+                        `$${displayOrder.total}`
+                      )}
+                    </td>
+                    <td className="payment">
+                      {isEditing ? (
+                        <select 
+                          value={editedOrder.paymentMethod} 
+                          onChange={(e) => setEditedOrder({...editedOrder, paymentMethod: e.target.value})}
+                          className="edit-input"
+                        >
+                          <option value="cash">現金</option>
+                          <option value="card">信用卡</option>
+                          <option value="linepay">Line Pay</option>
+                        </select>
+                      ) : (
+                        (displayOrder.paymentMethod === 'cash' ? '現金' : displayOrder.paymentMethod === 'card' ? '信用卡' : 'Line Pay')
+                      )}
+                    </td>
+                    <td className="actions">
+                      {isEditing ? (
+                        <>
+                          <button className="btn-save" onClick={saveEdit}>✓ 保存</button>
+                          <button className="btn-cancel" onClick={cancelEdit}>✗ 取消</button>
+                        </>
+                      ) : (
+                        <>
+                          <button className="btn-edit" onClick={() => startEdit(idx)}>✎ 編輯</button>
+                          <button className="btn-delete" onClick={() => deleteOrder(idx)}>🗑 刪除</button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

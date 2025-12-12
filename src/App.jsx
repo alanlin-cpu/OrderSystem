@@ -157,7 +157,17 @@ export default function App() {
 
   // 訂單記錄頁面
   if (currentPage === 'history') {
-    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} />
+    const handleUpdateOrder = (index, updatedOrder) => {
+      setOrders((prev) => {
+        const newOrders = [...prev]
+        newOrders[index] = updatedOrder
+        return newOrders
+      })
+    }
+    const handleDeleteOrder = (index) => {
+      setOrders((prev) => prev.filter((_, i) => i !== index))
+    }
+    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onUpdateOrder={handleUpdateOrder} onDeleteOrder={handleDeleteOrder} />
   }
 
   // 菜單與購物車頁面
