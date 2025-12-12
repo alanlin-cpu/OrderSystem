@@ -7,11 +7,17 @@
   margin: 0 auto;
 }
 
-.header {
-  text-align: center;
+.header-with-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 30px;
+}
+
+.header {
   font-size: 1.8em;
   color: #333;
+  margin: 0;
 }
 
 .layout {
@@ -521,17 +527,18 @@
 
 /* 導航按鈕 */
 .btn-nav-history {
-  margin-left: 20px;
-  padding: 8px 16px;
+  padding: 10px 20px;
   background: #4caf50;
   color: white;
   border: none;
   border-radius: 8px;
   cursor: pointer;
   font-weight: bold;
-  font-size: 0.95em;
+  font-size: 1em;
+  white-space: nowrap;
 }
 
 .btn-nav-history:hover {
   background: #388e3c;
+  transform: scale(1.05);
 }
