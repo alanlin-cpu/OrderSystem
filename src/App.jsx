@@ -131,7 +131,7 @@ export default function App() {
     }
 
     try {
-      const GAS_URL = 'https://script.google.com/macros/s/AKfycbx5eKo1NLrJU13IXQQ0D1hfLClAFYkPxv0IM9MTiQp_b1cxAfy5B8IVPj-yVvY57dlQ/exec'
+      const GAS_URL = 'https://script.google.com/macros/s/AKfycbxJbZWkm9b6yL9YPZcqe8y1cOTrP39Gv77J7JUEOkQNg2AdCboPJzUOpqBh_Z8oRyEy/exec'
       const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const json = await res.json().catch(() => null)
       if (!res.ok) throw new Error((json && json.message) || res.statusText || '送單失敗')
