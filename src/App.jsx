@@ -131,10 +131,10 @@ export default function App() {
     }
 
     try {
-      const GAS_URL = 'https://script.google.com/macros/s/AKfycbyrOru2KVZgc_BAQu6Op90uZ55Rmscaqsf4QyWOW3P7VaiKhJWLMXOdSUSxXP3gi9_A/exec'
+      const GAS_URL = 'https://script.google.com/macros/s/AKfycby0WS_FbUyNRPBpvqu4axpvF1Zaxdid_XjGJvEMuGXA4FbT60eVuHDEJG6Rsj3Xf0u_/exec'
       const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const json = await res.json().catch(() => null)
-      if (!res.ok) throw new Error((json && json.message) || res.statusText || '送單失敗')
+      if (!res.ok && res.status !== 302) throw new Error((json && json.message) || res.statusText || '送單失敗')
       alert('已送出訂單!')
       setOrders((prev) => [...prev, payload])
       setCart([])
