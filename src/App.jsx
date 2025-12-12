@@ -6,6 +6,7 @@ export default function App() {
   const [user, setUser] = useState(null)
   const [cart, setCart] = useState([])  // { item, quantity, sweetness, ice }
   const [orders, setOrders] = useState([])
+  const [archives, setArchives] = useState([]) // settlement archives
   const [currentPage, setCurrentPage] = useState('menu') // 'menu' or 'history'
 
   const [discount, setDiscount] = useState(null)
@@ -164,7 +165,17 @@ export default function App() {
         return newOrders
       })
     }
-    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} />
+
+    const handleSettleOrders = (indicesToSettle) => {
+      setOrders((prev) => {
+        const newOrders = prev.map((o, i) => indicesToSettle.includes(i) ? { ...o, deleted: true } : o)
+        return newOrders
+      })
+      const settled = indicesToSettle.map(i => orders[i])
+      setArchives((prev) => [...prev, { id: Date.now(), timestamp: new Date().toISOString(), orders: settled }])
+    }
+
+    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} />
   }
 
   // 菜單與購物車頁面

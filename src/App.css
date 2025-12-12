@@ -357,6 +357,25 @@
   background: #444;
 }
 
+/* 結算按鈕 */
+.btn-settle {
+  padding: 8px 14px;
+  background: #ff9800;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.btn-settle:hover { background: #fb8c00 }
+
+/* bar chart */
+.bar-chart { display:flex; flex-direction:column; gap:8px }
+.bar-row { display:flex; align-items:center; gap:8px }
+.bar-label { width:80px; font-size:0.9em }
+.bar-wrap { flex:1; background:#eee; border-radius:6px; overflow:hidden }
+.bar { background:linear-gradient(90deg,#4caf50,#81c784); color:white; padding:6px 8px; white-space:nowrap }
+
 /* 搜尋與篩選 */
 .order-filters {
   background: #f9f9f9;

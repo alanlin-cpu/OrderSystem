@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 
-export default function OrderHistory({ orders, onBack, onDeleteOrder }) {
+export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders }) {
   const [searchUser, setSearchUser] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
+  const [settleOpen, setSettleOpen] = useState(false)
 
   // 篩選訂單（只顯示未刪除的訂單搜尋結果，但表格顯示所有訂單）
   const filtered = orders.filter(order => {
@@ -20,6 +21,14 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder }) {
 
   // 統計：只計算未刪除的訂單
   const activeOrders = filtered.filter(o => !o.deleted)
+
+  // helper: get active indices within original orders array matching current filters
+  const activeIndices = orders.reduce((acc, o, i) => {
+    const userMatch = !searchUser || o.user.toLowerCase().includes(searchUser.toLowerCase())
+    const paymentMatch = !filterPayment || o.paymentMethod === filterPayment
+    if (userMatch && paymentMatch && !o.deleted) acc.push(i)
+    return acc
+  }, [])
 
   return (
     <div className="order-history-container">
@@ -129,6 +138,90 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder }) {
           <div className="stat-item">
             <span className="stat-label">訂單數</span>
             <span className="stat-value">{activeOrders.length}</span>
+          </div>
+        </div>
+      )}
+      <div style={{marginTop:20}}>
+        <button className="btn-settle" onClick={() => setSettleOpen(true)}>🔔 結算</button>
+      </div>
+
+      {/* 結算 Modal */}
+      {settleOpen && (
+        <div className="modal-overlay" onClick={() => setSettleOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{maxWidth:900}}>
+            <h3>結算預覽</h3>
+            <p>有效訂單：{activeOrders.length} 筆</p>
+
+            {/* 1. 每樣產品販售數量 (忽略客製化) */}
+            <div style={{display:'flex',gap:20,alignItems:'flex-start'}}>
+              <div style={{flex:1}}>
+                <h4>產品銷量</h4>
+                <table style={{width:'100%',marginBottom:12}}>
+                  <thead>
+                    <tr><th>產品</th><th>數量</th></tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const counts = {}
+                      activeOrders.forEach(o => o.items.forEach(it => { counts[it.name] = (counts[it.name]||0) + (it.quantity||1) }))
+                      return Object.keys(counts).map((name) => (
+                        <tr key={name}><td>{name}</td><td style={{textAlign:'right'}}>{counts[name]}</td></tr>
+                      ))
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{width:300}}>
+                <h4>銷量柱狀圖</h4>
+                <div className="bar-chart">
+                  {(() => {
+                    const counts = {}
+                    activeOrders.forEach(o => o.items.forEach(it => { counts[it.name] = (counts[it.name]||0) + (it.quantity||1) }))
+                    const entries = Object.entries(counts)
+                    const max = entries.reduce((m,[,v]) => Math.max(m,v), 1)
+                    return entries.map(([name, v]) => (
+                      <div className="bar-row" key={name}>
+                        <div className="bar-label">{name}</div>
+                        <div className="bar-wrap"><div className="bar" style={{width: `${(v/max)*100}%`}}>{v}</div></div>
+                      </div>
+                    ))
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* 2. 各支付方式統計、折扣總數、總收入 */}
+            <div style={{marginTop:16}}>
+              <h4>支付與金額彙總</h4>
+              <table style={{width:'100%'}}>
+                <tbody>
+                  {(() => {
+                    const payCounts = {cash:0,card:0,linepay:0}
+                    let totalDiscount = 0
+                    let totalRevenue = 0
+                    activeOrders.forEach(o => {
+                      payCounts[o.paymentMethod] = (payCounts[o.paymentMethod]||0) + 1
+                      totalDiscount += Number(o.discountAmount||0)
+                      totalRevenue += Number(o.total||0)
+                    })
+                    return (
+                      <>
+                        <tr><td>付款方式：現金</td><td style={{textAlign:'right'}}>{payCounts.cash}</td></tr>
+                        <tr><td>付款方式：信用卡</td><td style={{textAlign:'right'}}>{payCounts.card}</td></tr>
+                        <tr><td>付款方式：Line Pay</td><td style={{textAlign:'right'}}>{payCounts.linepay}</td></tr>
+                        <tr><td>折扣總數</td><td style={{textAlign:'right'}}>${totalDiscount}</td></tr>
+                        <tr><td>總收入</td><td style={{textAlign:'right'}}>${totalRevenue}</td></tr>
+                      </>
+                    )
+                  })()}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{display:'flex',gap:12,justifyContent:'flex-end',marginTop:18}}>
+              <button className="btn-cancel" onClick={() => setSettleOpen(false)}>取消</button>
+              <button className="btn-save" onClick={() => { onSettleOrders(activeIndices); setSettleOpen(false) }}>確認結算並刪除</button>
+            </div>
           </div>
         </div>
       )}
