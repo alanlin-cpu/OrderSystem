@@ -195,25 +195,25 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
               <h4>支付與金額彙總</h4>
               <table style={{width:'100%'}}>
                 <tbody>
-                  {(() => {
-                    const payCounts = {cash:0,card:0,linepay:0}
-                    let totalDiscount = 0
-                    let totalRevenue = 0
-                    activeOrders.forEach(o => {
-                      payCounts[o.paymentMethod] = (payCounts[o.paymentMethod]||0) + 1
-                      totalDiscount += Number(o.discountAmount||0)
-                      totalRevenue += Number(o.total||0)
-                    })
-                    return (
-                      <>
-                        <tr><td>付款方式：現金</td><td style={{textAlign:'right'}}>{payCounts.cash}</td></tr>
-                        <tr><td>付款方式：信用卡</td><td style={{textAlign:'right'}}>{payCounts.card}</td></tr>
-                        <tr><td>付款方式：Line Pay</td><td style={{textAlign:'right'}}>{payCounts.linepay}</td></tr>
-                        <tr><td>折扣總數</td><td style={{textAlign:'right'}}>${totalDiscount}</td></tr>
-                        <tr><td>總收入</td><td style={{textAlign:'right'}}>${totalRevenue}</td></tr>
-                      </>
-                    )
-                  })()}
+                    {(() => {
+                      const payTotals = {cash:0,card:0,linepay:0}
+                      let totalDiscount = 0
+                      let totalRevenue = 0
+                      activeOrders.forEach(o => {
+                        payTotals[o.paymentMethod] = (payTotals[o.paymentMethod]||0) + Number(o.total||0)
+                        totalDiscount += Number(o.discountAmount||0)
+                        totalRevenue += Number(o.total||0)
+                      })
+                      return (
+                        <>
+                          <tr><td>付款方式：現金</td><td style={{textAlign:'right'}}>${payTotals.cash}</td></tr>
+                          <tr><td>付款方式：信用卡</td><td style={{textAlign:'right'}}>${payTotals.card}</td></tr>
+                          <tr><td>付款方式：Line Pay</td><td style={{textAlign:'right'}}>${payTotals.linepay}</td></tr>
+                          <tr><td>折扣總數</td><td style={{textAlign:'right'}}>${totalDiscount}</td></tr>
+                          <tr><td>總收入</td><td style={{textAlign:'right'}}>${totalRevenue}</td></tr>
+                        </>
+                      )
+                    })()}
                 </tbody>
               </table>
             </div>
