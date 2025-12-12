@@ -167,12 +167,13 @@ export default function App() {
     }
 
     const handleSettleOrders = (indicesToSettle) => {
-      setOrders((prev) => {
-        const newOrders = prev.map((o, i) => indicesToSettle.includes(i) ? { ...o, deleted: true } : o)
-        return newOrders
-      })
-      const settled = indicesToSettle.map(i => orders[i])
+      // collect settled orders from current orders
+      const settled = indicesToSettle.map(i => orders[i]).filter(Boolean)
+      if (settled.length === 0) return
+      // archive settled orders
       setArchives((prev) => [...prev, { id: Date.now(), timestamp: new Date().toISOString(), orders: settled }])
+      // remove settled orders from active orders so they no longer show
+      setOrders((prev) => prev.filter((_, idx) => !indicesToSettle.includes(idx)))
     }
 
     return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} />
