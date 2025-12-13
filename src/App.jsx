@@ -132,9 +132,13 @@ export default function App() {
 
     try {
       const GAS_URL = 'https://script.google.com/macros/s/AKfycbyPIeUwfSrcA6r_ULVVVzITfsJj02-CUaWeGLxQK8IfKZZTkjy6uCZQoCxTko2gv_Qf/exec'
-      const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const json = await res.json().catch(() => null)
-      if (!res.ok && res.status !== 302) throw new Error((json && json.message) || res.statusText || '送單失敗')
+      // 避免瀏覽器 CORS 預檢阻擋：使用 no-cors 並以 text/plain 傳送
+      await fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      })
       alert('已送出訂單!')
       setOrders((prev) => [...prev, payload])
       setCart([])
