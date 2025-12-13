@@ -84,7 +84,16 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
               {filtered.map((order, idx) => (
                 <tr key={idx} className={`order-row ${order.deleted ? 'deleted' : ''}`}>
                   <td className="time">{new Date(order.timestamp).toLocaleString('zh-TW')}</td>
-                  <td className="user">{order.user} {order.deleted && <span className="deleted-badge">【已刪除】</span>}</td>
+                  <td className="user">
+                    {order.user} 
+                    {order.deleted && (
+                      <span className="deleted-badge">
+                        【已刪除】
+                        {order.deletedBy && <><br/><small>刪除者: {order.deletedBy}</small></>}
+                        {order.deletedAt && <><br/><small>{new Date(order.deletedAt).toLocaleString('zh-TW')}</small></>}
+                      </span>
+                    )}
+                  </td>
                   <td className="items">
                     <details>
                       <summary>{order.items.length} 項</summary>
