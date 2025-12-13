@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react'
+import { GAS_URL, SHEET_ID, SHEET_NAME } from './config'
+import { computeOrderID } from './utils'
+import ToastContainer from './components/Toast'
 import './App.css'
 import OrderHistory from './OrderHistory'
 
 export default function App() {
-  const SHEET_ID = '1m2TkzWJb1U-jTm6JKDAnmM-WsHY1NbMlxQwVa_q-jx8'
-  const SHEET_NAME = 'Orders'
+  // moved to config.js
 
   const [user, setUser] = useState(null)
   const [cart, setCart] = useState([])  // { item, quantity, sweetness, ice }
@@ -30,21 +32,7 @@ export default function App() {
   const [sweetness, setSweetness] = useState('正常糖')
   const [ice, setIce] = useState('正常冰')
 
-  const computeOrderID = (tsInput) => {
-    try {
-      const d = tsInput ? new Date(tsInput) : new Date()
-      const y = d.getFullYear()
-      const m = String(d.getMonth() + 1).padStart(2, '0')
-      const day = String(d.getDate()).padStart(2, '0')
-      const hh = String(d.getHours()).padStart(2, '0')
-      const mm = String(d.getMinutes()).padStart(2, '0')
-      const ss = String(d.getSeconds()).padStart(2, '0')
-      const ms = String(d.getMilliseconds()).padStart(3, '0')
-      return `${y}${m}${day}${hh}${mm}${ss}${ms}`
-    } catch {
-      return `${Date.now()}`
-    }
-  }
+  // computeOrderID now comes from utils.js
 
   // 持久化：載入 orders/archives；變更時儲存到 localStorage
   useEffect(() => {
@@ -267,7 +255,7 @@ export default function App() {
     setPromoMessage('')
 
     // 異步在背景傳送到 Google Apps Script（不阻擋 UI）
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyPIeUwfSrcA6r_ULVVVzITfsJj02-CUaWeGLxQK8IfKZZTkjy6uCZQoCxTko2gv_Qf/exec'
+    // GAS_URL from config
     fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
@@ -358,11 +346,7 @@ export default function App() {
       {/* <div className="debug">DEBUG: user={String(user)} subtotal={subtotal} items={cart.length} discountAmount={discount ? (discount.type==='percent'?Math.round(subtotal*(discount.value/100)):discount.value):0}</div> */}
 
       {/* Toasts */}
-      <div className="toast-container">
-        {toasts.map(t => (
-          <div key={t.id} className={`toast ${t.type}`}>{t.message}</div>
-        ))}
-      </div>
+      <ToastContainer toasts={toasts} />
 
       <div className="layout">
         {/* 左邊：格狀菜單 */}

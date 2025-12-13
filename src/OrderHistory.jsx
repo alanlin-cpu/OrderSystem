@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import ConfirmDialog from './components/ConfirmDialog'
 
 export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders }) {
   const [searchUser, setSearchUser] = useState('')
@@ -135,17 +136,12 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
       )}
 
       {/* 自訂刪除確認對話框 */}
-      {confirmDeleteIndex !== null && (
-        <div className="confirm-overlay" onClick={() => setConfirmDeleteIndex(null)}>
-          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="confirm-title">確定要刪除此訂單嗎？此訂單記錄將保留但顯示為已刪除。</div>
-            <div className="confirm-actions">
-              <button className="btn-confirm cancel" onClick={() => setConfirmDeleteIndex(null)}>取消</button>
-              <button className="btn-confirm ok" onClick={() => { onDeleteOrder(confirmDeleteIndex); setConfirmDeleteIndex(null) }}>刪除</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={confirmDeleteIndex !== null}
+        title="確定要刪除此訂單嗎？此訂單記錄將保留但顯示為已刪除。"
+        onCancel={() => setConfirmDeleteIndex(null)}
+        onConfirm={() => { onDeleteOrder(confirmDeleteIndex); setConfirmDeleteIndex(null) }}
+      />
 
       {/* 統計 */}
       {activeOrders.length > 0 && (
