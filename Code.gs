@@ -16,12 +16,12 @@ function doPost(e) {
         const range = sheet.getDataRange();
         const values = range.getValues();
 
-        // orderID 放在第 11 欄（1-based），索引 10
+        // orderID 放在第 2 欄（1-based），索引 1
         for (let i = 1; i < values.length; i++) {
-          const rowOrderID = String(values[i][10] || '').trim();
+          const rowOrderID = String(values[i][1] || '').trim();
           if (rowOrderID && rowOrderID === String(payload.orderID || '').trim()) {
-            sheet.getRange(i + 1, 9).setValue(payload.deletedBy || '');
-            sheet.getRange(i + 1, 10).setValue(payload.deletedAt || '');
+            sheet.getRange(i + 1, 10).setValue(payload.deletedBy || '');
+            sheet.getRange(i + 1, 11).setValue(payload.deletedAt || '');
             break;
           }
         }
@@ -40,6 +40,7 @@ function doPost(e) {
     const itemsJson = JSON.stringify(payload.items || []);
     const row = [
       new Date(),                          // 時間
+      payload.orderID || '',               // 訂單編號
       payload.user || '',                  // 員工
       itemsJson,                           // 品項
       Number(payload.subtotal || 0),       // 小計
@@ -48,8 +49,7 @@ function doPost(e) {
       payload.paymentMethod || '',         // 付款
       payload.promoCode || '',             // 折扣代碼
       payload.deletedBy || '',             // 刪除者
-      payload.deletedAt || '',             // 刪除時間
-      payload.orderID || ''                // 訂單編號
+      payload.deletedAt || ''              // 刪除時間
     ];
     sheet.appendRow(row);
 

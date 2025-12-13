@@ -106,18 +106,18 @@ export default function App() {
       const rows = data?.table?.rows || []
       const parsed = rows.map(r => {
         const c = r.c || []
-        const ts = c[0]?.v || new Date().toISOString()
-        const uname = c[1]?.v || ''
+        const ts = c[0]?.v || new Date().toISOString()  // 時間
+        const orderID = c[1]?.v || computeOrderID(ts)    // 訂單編號
+        const uname = c[2]?.v || ''
         let items = []
-        try { items = JSON.parse(c[2]?.v || '[]') } catch (_) {}
-        const subtotal = Number(c[3]?.v || 0)
-        const discountAmount = Number(c[4]?.v || 0)
-        const total = Number(c[5]?.v || 0)
-        const payment = c[6]?.v || 'cash'
-        const promo = c[7]?.v || ''
-        const deletedBy = c[8]?.v || ''
-        const deletedAt = c[9]?.v || ''
-        const orderID = c[10]?.v || computeOrderID(ts)
+        try { items = JSON.parse(c[3]?.v || '[]') } catch (_) {}
+        const subtotal = Number(c[4]?.v || 0)
+        const discountAmount = Number(c[5]?.v || 0)
+        const total = Number(c[6]?.v || 0)
+        const payment = c[7]?.v || 'cash'
+        const promo = c[8]?.v || ''
+        const deletedBy = c[9]?.v || ''
+        const deletedAt = c[10]?.v || ''
         return { user: uname, items, subtotal, discountAmount, total, paymentMethod: payment, promoCode: promo, timestamp: ts, deletedBy, deletedAt, orderID }
       })
       if (parsed.length > 0) setOrders(parsed)
