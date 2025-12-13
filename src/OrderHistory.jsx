@@ -4,6 +4,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
   const [searchUser, setSearchUser] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
   const [settleOpen, setSettleOpen] = useState(false)
+  const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null)
 
   // 篩選訂單（只顯示未刪除的訂單搜尋結果，但表格顯示所有訂單）
   const filtered = orders.filter(order => {
@@ -14,9 +15,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
 
   // 刪除訂單（軟刪除，標記為已刪除）
   const deleteOrder = (index) => {
-    if (confirm('確定要刪除此訂單？此訂單記錄將保留但顯示為已刪除')) {
-      onDeleteOrder(index)
-    }
+    setConfirmDeleteIndex(index)
   }
 
   // 統計：只計算未刪除的訂單
@@ -132,6 +131,19 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 自訂刪除確認對話框 */}
+      {confirmDeleteIndex !== null && (
+        <div className="confirm-overlay" onClick={() => setConfirmDeleteIndex(null)}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-title">確定要刪除此訂單嗎？此訂單記錄將保留但顯示為已刪除。</div>
+            <div className="confirm-actions">
+              <button className="btn-confirm cancel" onClick={() => setConfirmDeleteIndex(null)}>取消</button>
+              <button className="btn-confirm ok" onClick={() => { onDeleteOrder(confirmDeleteIndex); setConfirmDeleteIndex(null) }}>刪除</button>
+            </div>
+          </div>
         </div>
       )}
 

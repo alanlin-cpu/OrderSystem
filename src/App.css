@@ -666,3 +666,51 @@
   background: #388e3c;
   transform: scale(1.05);
 }
+
+/* Toast */
+.toast-container {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1200;
+}
+.toast {
+  background: rgba(33, 150, 243, 0.95);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  font-weight: bold;
+}
+.toast.success { background: rgba(76, 175, 80, 0.95) }
+.toast.error { background: rgba(244, 67, 54, 0.95) }
+
+/* Confirm modal */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1300;
+}
+.confirm-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  width: 92%;
+  max-width: 420px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+}
+.confirm-title { font-size: 1.2em; margin-bottom: 12px; }
+.confirm-actions { display:flex; gap:10px; justify-content:flex-end; margin-top: 14px; }
+.btn-confirm {
+  padding: 8px 14px; border:none; border-radius: 8px; font-weight: bold; cursor:pointer;
+}
+.btn-confirm.ok { background:#f44336; color:#fff }
+.btn-confirm.cancel { background:#9e9e9e; color:#fff }

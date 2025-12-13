@@ -17,6 +17,14 @@ export default function App() {
   const [promoMessage, setPromoMessage] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('cash')
 
+  // Toast state
+  const [toasts, setToasts] = useState([]) // { id, type: 'success'|'error'|'info', message }
+  const pushToast = (message, type = 'success', ttl = 3000) => {
+    const id = Date.now() + Math.random()
+    setToasts(prev => [...prev, { id, type, message }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ttl)
+  }
+
   // 客製化彈出視窗狀態
   const [selectedItem, setSelectedItem] = useState(null)
   const [sweetness, setSweetness] = useState('正常糖')
@@ -251,7 +259,7 @@ export default function App() {
     }
 
     // 立即更新本地狀態（不等待網路回應）
-    alert('已送出訂單!')
+    pushToast('已送出訂單！', 'success')
     setOrders((prev) => [...prev, payload])
     setCart([])
     setDiscount(null)
@@ -267,6 +275,7 @@ export default function App() {
       body: JSON.stringify(payload)
     }).catch(err => {
       console.error('背景上傳 Google Sheet 失敗:', err)
+      pushToast('訂單已送出，本機保留；雲端暫時失敗', 'error')
     })
   }
 
@@ -347,6 +356,13 @@ export default function App() {
         </div>
       </div>
       {/* <div className="debug">DEBUG: user={String(user)} subtotal={subtotal} items={cart.length} discountAmount={discount ? (discount.type==='percent'?Math.round(subtotal*(discount.value/100)):discount.value):0}</div> */}
+
+      {/* Toasts */}
+      <div className="toast-container">
+        {toasts.map(t => (
+          <div key={t.id} className={`toast ${t.type}`}>{t.message}</div>
+        ))}
+      </div>
 
       <div className="layout">
         {/* 左邊：格狀菜單 */}
