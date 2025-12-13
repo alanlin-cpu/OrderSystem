@@ -3,6 +3,9 @@ import './App.css'
 import OrderHistory from './OrderHistory'
 
 export default function App() {
+  const SHEET_ID = '1m2TkzWJb1U-jTm6JKDAnmM-WsHY1NbMlxQwVa_q-jx8'
+  const SHEET_NAME = 'Orders'
+
   const [user, setUser] = useState(null)
   const [cart, setCart] = useState([])  // { item, quantity, sweetness, ice }
   const [orders, setOrders] = useState([])
@@ -22,12 +25,23 @@ export default function App() {
   // 持久化：載入 orders/archives；變更時儲存到 localStorage
   useEffect(() => {
     try {
+      const savedUser = localStorage.getItem('user')
+      if (savedUser) setUser(savedUser)
+
+      const savedPayment = localStorage.getItem('paymentMethod')
+      if (savedPayment) setPaymentMethod(savedPayment)
+
       const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]')
       const savedArchives = JSON.parse(localStorage.getItem('archives') || '[]')
-      if (Array.isArray(savedOrders)) setOrders(savedOrders)
+      if (Array.isArray(savedOrders) && savedOrders.length > 0) {
+        setOrders(savedOrders)
+      } else {
+        // 若本地沒有訂單，嘗試從 Google Sheet 載入
+        loadOrdersFromSheet()
+      }
       if (Array.isArray(savedArchives)) setArchives(savedArchives)
     } catch (e) {
-      console.warn('載入本地訂單失敗', e)
+      console.warn('載入本地或雲端訂單時發生問題', e)
     }
   }, [])
 
@@ -46,6 +60,51 @@ export default function App() {
       console.warn('儲存本地結算檔案失敗', e)
     }
   }, [archives])
+
+  useEffect(() => {
+    try {
+      if (user) localStorage.setItem('user', user)
+    } catch (e) {
+      console.warn('儲存使用者失敗', e)
+    }
+  }, [user])
+
+  useEffect(() => {
+    try {
+      if (paymentMethod) localStorage.setItem('paymentMethod', paymentMethod)
+    } catch (e) {
+      console.warn('儲存付款方式失敗', e)
+    }
+  }, [paymentMethod])
+
+  async function loadOrdersFromSheet() {
+    try {
+      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}`
+      const res = await fetch(url)
+      const text = await res.text()
+      const start = text.indexOf('{')
+      const end = text.lastIndexOf('}')
+      if (start === -1 || end === -1) throw new Error('Unexpected response from gviz')
+      const data = JSON.parse(text.slice(start, end + 1))
+      const rows = data?.table?.rows || []
+      const parsed = rows.map(r => {
+        const c = r.c || []
+        const ts = c[0]?.v || new Date().toISOString()
+        const uname = c[1]?.v || ''
+        let items = []
+        try { items = JSON.parse(c[2]?.v || '[]') } catch (_) {}
+        const subtotal = Number(c[3]?.v || 0)
+        const discountAmount = Number(c[4]?.v || 0)
+        const total = Number(c[5]?.v || 0)
+        const payment = c[6]?.v || 'cash'
+        const promo = c[7]?.v || ''
+        return { user: uname, items, subtotal, discountAmount, total, paymentMethod: payment, promoCode: promo, timestamp: ts }
+      })
+      if (parsed.length > 0) setOrders(parsed)
+    } catch (e) {
+      console.warn('載入雲端訂單失敗（可能需要將試算表發佈為公開）', e)
+    }
+  }
 
   const promoOptions = {
     A: { type: 'percent', value: 10 }, // 10% off
@@ -69,6 +128,11 @@ export default function App() {
     const password = e.target.password.value.trim()
     if (username && password) setUser(username)
     else alert('請輸入帳號和密碼')
+  }
+
+  const handleLogout = () => {
+    setUser(null)
+    try { localStorage.removeItem('user') } catch {}
   }
 
   // 開啟客製化視窗
@@ -225,7 +289,10 @@ export default function App() {
     <div className="container">
       <div className="header-with-nav">
         <h2 className="header">歡迎 {user}</h2>
-        <button className="btn-nav-history" onClick={() => setCurrentPage('history')}>📋 訂單記錄</button>
+        <div style={{display:'flex', gap:8}}>
+          <button className="btn-nav-history" onClick={() => setCurrentPage('history')}>📋 訂單記錄</button>
+          <button className="btn-nav-history" onClick={handleLogout}>🚪 登出</button>
+        </div>
       </div>
       {/* <div className="debug">DEBUG: user={String(user)} subtotal={subtotal} items={cart.length} discountAmount={discount ? (discount.type==='percent'?Math.round(subtotal*(discount.value/100)):discount.value):0}</div> */}
 
