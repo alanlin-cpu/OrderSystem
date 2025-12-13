@@ -71,6 +71,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
             <thead>
               <tr>
                 <th>時間</th>
+                <th>編號</th>
                 <th>員工</th>
                 <th>品項</th>
                 <th>小計</th>
@@ -84,6 +85,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
               {filtered.map((order, idx) => (
                 <tr key={idx} className={`order-row ${order.deleted ? 'deleted' : ''}`}>
                   <td className="time">{new Date(order.timestamp).toLocaleString('zh-TW')}</td>
+                  <td className="order-id">{order.orderID || '—'}</td>
                   <td className="user">
                     {order.user} 
                     {order.deleted && (

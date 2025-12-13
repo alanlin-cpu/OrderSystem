@@ -9,30 +9,27 @@ function doPost(e) {
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-    // 若是刪除操作，更新 Orders sheet 中對應行的 deletedBy 和 deletedAt
+    // 若是刪除操作，使用 orderID 尋找對應行，更新 deletedBy / deletedAt
     if (payload.action === 'delete') {
       const sheet = ss.getSheetByName(ORDERS_SHEET);
       if (sheet) {
         const range = sheet.getDataRange();
         const values = range.getValues();
-        
-        // 遍歷找到 timestamp 匹配的行（第 1 列是時間，第 9 列不再是 timestamp，所以改用第 1 列）
+
+        // orderID 放在第 11 欄（1-based），索引 10
         for (let i = 1; i < values.length; i++) {
-          const rowTimestamp = values[i][0];
-          // 比較時間（可能是 Date 物件或字符串，都轉為 ISO 字符串比較）
-          const rowTime = rowTimestamp instanceof Date ? rowTimestamp.toISOString() : String(rowTimestamp);
-          if (rowTime.includes(payload.timestamp) || payload.timestamp.includes(rowTime.split('T')[0])) {
-            // 找到對應行，更新第 9 列（deletedBy）和第 10 列（deletedAt）
+          const rowOrderID = String(values[i][10] || '').trim();
+          if (rowOrderID && rowOrderID === String(payload.orderID || '').trim()) {
             sheet.getRange(i + 1, 9).setValue(payload.deletedBy || '');
             sheet.getRange(i + 1, 10).setValue(payload.deletedAt || '');
             break;
           }
         }
       }
-      
+
       const logsSheet = ss.getSheetByName(LOGS_SHEET) || ss.insertSheet(LOGS_SHEET);
       logsSheet.appendRow([ new Date(), 'doPost_delete', raw, JSON.stringify({ status: 'ok' }) ]);
-      
+
       return ContentService
         .createTextOutput(JSON.stringify({ status: 'ok' }))
         .setMimeType(ContentService.MimeType.JSON);
@@ -51,7 +48,8 @@ function doPost(e) {
       payload.paymentMethod || '',         // 付款
       payload.promoCode || '',             // 折扣代碼
       payload.deletedBy || '',             // 刪除者
-      payload.deletedAt || ''              // 刪除時間
+      payload.deletedAt || '',             // 刪除時間
+      payload.orderID || ''                // 訂單編號
     ];
     sheet.appendRow(row);
 

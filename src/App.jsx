@@ -22,6 +22,20 @@ export default function App() {
   const [sweetness, setSweetness] = useState('正常糖')
   const [ice, setIce] = useState('正常冰')
 
+  const computeOrderID = (tsInput) => {
+    try {
+      const d = tsInput ? new Date(tsInput) : new Date()
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      const hh = String(d.getHours()).padStart(2, '0')
+      const mm = String(d.getMinutes()).padStart(2, '0')
+      return `${y}${m}${day}${hh}${mm}`
+    } catch {
+      return `${Date.now()}`
+    }
+  }
+
   // 持久化：載入 orders/archives；變更時儲存到 localStorage
   useEffect(() => {
     try {
@@ -31,7 +45,10 @@ export default function App() {
       const savedPayment = localStorage.getItem('paymentMethod')
       if (savedPayment) setPaymentMethod(savedPayment)
 
-      const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]')
+      const savedOrdersRaw = JSON.parse(localStorage.getItem('orders') || '[]')
+      const savedOrders = Array.isArray(savedOrdersRaw)
+        ? savedOrdersRaw.map(o => ({ ...o, orderID: o.orderID || computeOrderID(o.timestamp) }))
+        : []
       const savedArchives = JSON.parse(localStorage.getItem('archives') || '[]')
       if (Array.isArray(savedOrders) && savedOrders.length > 0) {
         setOrders(savedOrders)
@@ -98,7 +115,10 @@ export default function App() {
         const total = Number(c[5]?.v || 0)
         const payment = c[6]?.v || 'cash'
         const promo = c[7]?.v || ''
-        return { user: uname, items, subtotal, discountAmount, total, paymentMethod: payment, promoCode: promo, timestamp: ts }
+        const deletedBy = c[8]?.v || ''
+        const deletedAt = c[9]?.v || ''
+        const orderID = c[10]?.v || computeOrderID(ts)
+        return { user: uname, items, subtotal, discountAmount, total, paymentMethod: payment, promoCode: promo, timestamp: ts, deletedBy, deletedAt, orderID }
       })
       if (parsed.length > 0) setOrders(parsed)
     } catch (e) {
@@ -210,8 +230,18 @@ export default function App() {
       ice: entry.ice
     }))
 
+    // 生成訂單編號: 日期時間組成 (YYYYMMDDHHMM)
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const date = String(now.getDate()).padStart(2, '0')
+    const hours = String(now.getHours()).padStart(2, '0')
+    const minutes = String(now.getMinutes()).padStart(2, '0')
+    const orderID = `${year}${month}${date}${hours}${minutes}`
+
     const payload = {
-      timestamp: new Date().toISOString(),  // 用於前端顯示和 Sheet 第一列（時間）
+      orderID,                              // 訂單編號
+      timestamp: now.toISOString(),         // 用於前端顯示和 Sheet 第一列（時間）
       user,
       items: itemsForPayload,
       subtotal,
@@ -269,11 +299,11 @@ export default function App() {
         return newOrders
       })
 
-      // 同步到 Google Sheet
+      // 同步到 Google Sheet，使用 orderID 找到對應行更新刪除者資訊
       const GAS_URL = 'https://script.google.com/macros/s/AKfycbyPIeUwfSrcA6r_ULVVVzITfsJj02-CUaWeGLxQK8IfKZZTkjy6uCZQoCxTko2gv_Qf/exec'
       const deletePayload = {
         action: 'delete',
-        timestamp: orderToDelete.timestamp,
+        orderID: orderToDelete.orderID || computeOrderID(orderToDelete.timestamp),
         deletedBy: user,
         deletedAt
       }
