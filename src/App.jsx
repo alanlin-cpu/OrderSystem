@@ -30,7 +30,9 @@ export default function App() {
       const day = String(d.getDate()).padStart(2, '0')
       const hh = String(d.getHours()).padStart(2, '0')
       const mm = String(d.getMinutes()).padStart(2, '0')
-      return `${y}${m}${day}${hh}${mm}`
+      const ss = String(d.getSeconds()).padStart(2, '0')
+      const ms = String(d.getMilliseconds()).padStart(3, '0')
+      return `${y}${m}${day}${hh}${mm}${ss}${ms}`
     } catch {
       return `${Date.now()}`
     }
@@ -230,14 +232,9 @@ export default function App() {
       ice: entry.ice
     }))
 
-    // 生成訂單編號: 日期時間組成 (YYYYMMDDHHMM)
+    // 生成訂單編號：精確到毫秒 (YYYYMMDDHHMMSSmmm)
     const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, '0')
-    const date = String(now.getDate()).padStart(2, '0')
-    const hours = String(now.getHours()).padStart(2, '0')
-    const minutes = String(now.getMinutes()).padStart(2, '0')
-    const orderID = `${year}${month}${date}${hours}${minutes}`
+    const orderID = computeOrderID(now)
 
     const payload = {
       orderID,                              // 訂單編號
