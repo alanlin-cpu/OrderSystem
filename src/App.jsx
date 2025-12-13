@@ -143,7 +143,17 @@ export default function App() {
       setPromoMessage('')
     } catch (err) {
       console.error(err)
-      alert('送單失敗，請檢查網路/後端設定：' + (err.message || err))
+      // 若因瀏覽器跨域阻擋（TypeError: Failed to fetch），仍樂觀視為送出成功，避免重複送單
+      if (err && err.name === 'TypeError') {
+        alert('已送出（瀏覽器跨域可能阻擋回應），請稍後到 Google Sheet 確認；如未入帳再重新送單。')
+        setOrders((prev) => [...prev, payload])
+        setCart([])
+        setDiscount(null)
+        setPromoCode('')
+        setPromoMessage('')
+      } else {
+        alert('送單失敗，請檢查網路/後端設定：' + (err.message || err))
+      }
     }
   }
 
