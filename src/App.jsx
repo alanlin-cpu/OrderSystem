@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import './App.css'
 import OrderHistory from './OrderHistory'
 
@@ -18,6 +18,34 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState(null)
   const [sweetness, setSweetness] = useState('正常糖')
   const [ice, setIce] = useState('正常冰')
+
+  // 持久化：載入 orders/archives；變更時儲存到 localStorage
+  useEffect(() => {
+    try {
+      const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]')
+      const savedArchives = JSON.parse(localStorage.getItem('archives') || '[]')
+      if (Array.isArray(savedOrders)) setOrders(savedOrders)
+      if (Array.isArray(savedArchives)) setArchives(savedArchives)
+    } catch (e) {
+      console.warn('載入本地訂單失敗', e)
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('orders', JSON.stringify(orders))
+    } catch (e) {
+      console.warn('儲存本地訂單失敗', e)
+    }
+  }, [orders])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('archives', JSON.stringify(archives))
+    } catch (e) {
+      console.warn('儲存本地結算檔案失敗', e)
+    }
+  }, [archives])
 
   const promoOptions = {
     A: { type: 'percent', value: 10 }, // 10% off
