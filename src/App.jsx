@@ -210,7 +210,7 @@ export default function App() {
         <h2 className="header">歡迎 {user}</h2>
         <button className="btn-nav-history" onClick={() => setCurrentPage('history')}>📋 訂單記錄</button>
       </div>
-      <div className="debug">DEBUG: user={String(user)} subtotal={subtotal} items={cart.length} discountAmount={discount ? (discount.type==='percent'?Math.round(subtotal*(discount.value/100)):discount.value):0}</div>
+      {/* <div className="debug">DEBUG: user={String(user)} subtotal={subtotal} items={cart.length} discountAmount={discount ? (discount.type==='percent'?Math.round(subtotal*(discount.value/100)):discount.value):0}</div> */}
 
       <div className="layout">
         {/* 左邊：格狀菜單 */}
