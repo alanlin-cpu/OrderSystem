@@ -257,10 +257,34 @@ export default function App() {
   // 訂單記錄頁面
   if (currentPage === 'history') {
     const handleDeleteOrder = (index) => {
+      const orderToDelete = orders[index]
+      if (!orderToDelete) return
+
+      const deletedAt = new Date().toISOString()
+      
+      // 更新本地狀態
       setOrders((prev) => {
         const newOrders = [...prev]
-        newOrders[index] = { ...newOrders[index], deleted: true, deletedBy: user, deletedAt: new Date().toISOString() }
+        newOrders[index] = { ...newOrders[index], deleted: true, deletedBy: user, deletedAt }
         return newOrders
+      })
+
+      // 同步到 Google Sheet
+      const GAS_URL = 'https://script.google.com/macros/s/AKfycbyPIeUwfSrcA6r_ULVVVzITfsJj02-CUaWeGLxQK8IfKZZTkjy6uCZQoCxTko2gv_Qf/exec'
+      const deletePayload = {
+        action: 'delete',
+        timestamp: orderToDelete.timestamp,
+        deletedBy: user,
+        deletedAt
+      }
+      
+      fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(deletePayload)
+      }).catch(err => {
+        console.error('同步刪除狀態到 Google Sheet 失敗:', err)
       })
     }
 
