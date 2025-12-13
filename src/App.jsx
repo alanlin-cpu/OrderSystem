@@ -211,15 +211,16 @@ export default function App() {
     }))
 
     const payload = {
+      timestamp: new Date().toISOString(),  // 用於前端顯示和 Sheet 第一列（時間）
       user,
       items: itemsForPayload,
       subtotal,
       discountAmount,
-      discountType: discount ? discount.type : null,
-      promoCode: discount ? promoCode.trim().toUpperCase() : '',
       total,
       paymentMethod,
-      timestamp: new Date().toISOString()
+      promoCode: discount ? promoCode.trim().toUpperCase() : '',
+      deletedBy: null,    // 初始未刪除
+      deletedAt: null     // 初始未刪除
     }
 
     // 立即更新本地狀態（不等待網路回應）
