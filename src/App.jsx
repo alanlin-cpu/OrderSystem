@@ -130,35 +130,24 @@ export default function App() {
       timestamp: new Date().toISOString()
     }
 
-    try {
-      const GAS_URL = 'https://script.google.com/macros/s/AKfycbyPIeUwfSrcA6r_ULVVVzITfsJj02-CUaWeGLxQK8IfKZZTkjy6uCZQoCxTko2gv_Qf/exec'
-      // 避免瀏覽器 CORS 預檢阻擋：使用 no-cors 並以 text/plain 傳送
-      await fetch(GAS_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload)
-      })
-      alert('已送出訂單!')
-      setOrders((prev) => [...prev, payload])
-      setCart([])
-      setDiscount(null)
-      setPromoCode('')
-      setPromoMessage('')
-    } catch (err) {
-      console.error(err)
-      // 若因瀏覽器跨域阻擋（TypeError: Failed to fetch），仍樂觀視為送出成功，避免重複送單
-      if (err && err.name === 'TypeError') {
-        alert('已送出（瀏覽器跨域可能阻擋回應），請稍後到 Google Sheet 確認；如未入帳再重新送單。')
-        setOrders((prev) => [...prev, payload])
-        setCart([])
-        setDiscount(null)
-        setPromoCode('')
-        setPromoMessage('')
-      } else {
-        alert('送單失敗，請檢查網路/後端設定：' + (err.message || err))
-      }
-    }
+    // 立即更新本地狀態（不等待網路回應）
+    alert('已送出訂單!')
+    setOrders((prev) => [...prev, payload])
+    setCart([])
+    setDiscount(null)
+    setPromoCode('')
+    setPromoMessage('')
+
+    // 異步在背景傳送到 Google Apps Script（不阻擋 UI）
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyPIeUwfSrcA6r_ULVVVzITfsJj02-CUaWeGLxQK8IfKZZTkjy6uCZQoCxTko2gv_Qf/exec'
+    fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    }).catch(err => {
+      console.error('背景上傳 Google Sheet 失敗:', err)
+    })
   }
 
   if (!user) return (
