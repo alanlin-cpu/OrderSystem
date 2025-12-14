@@ -194,26 +194,16 @@ export default function App() {
   }
 
   const handleManualSync = async () => {
-    pushToast('開始同步雲端訂單…', 'info', 2000)
     try {
       const addedFromApi = await loadOrdersFromApi()
-      if (addedFromApi > 0) {
-        pushToast(`同步成功：新增 ${addedFromApi} 筆`, 'success')
-        return
-      }
-      pushToast('同步完成：沒有新訂單', 'success')
+      // 無 toast 提示，靜默同步
     } catch (err) {
       console.warn('doGet 同步失敗，嘗試 gviz fallback', err)
       try {
         const addedFromSheet = await loadOrdersFromSheet()
-        if (addedFromSheet > 0) {
-          pushToast(`gviz 同步成功：新增 ${addedFromSheet} 筆`, 'success')
-        } else {
-          pushToast('gviz 同步完成：沒有新訂單', 'success')
-        }
+        // 無 toast 提示，靜默同步
       } catch (err2) {
         console.warn('同步失敗', err2)
-        pushToast('同步失敗：請檢查試算表權限與網路', 'error')
       }
     }
   }
@@ -554,7 +544,7 @@ export default function App() {
                   .map((entry, index) => (
                 <li key={index} className="cart-item">
                   <span>
-                    {entry.item.name} - ${entry.item.price} × {entry.quantity}<br />
+                    {entry.item.name} x{entry.quantity} • ${entry.item.price}<br />
                     <small>{entry.sweetness} ・ {entry.ice}</small>
                   </span>
                   <div className="quantity-controls">

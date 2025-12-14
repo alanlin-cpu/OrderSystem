@@ -5,14 +5,14 @@ const LOGS_SHEET = 'Logs';
 /**
  * 將 items 轉為人類可讀的排序字串：
  * 依 `name` 排序，格式為：
- * "品項名 x數量（$單價）"；以全形分號（；）分隔
+ * "品項名 x數量・$單價"；以分號（;）分隔
  */
 function formatItemsHumanReadable(items) {
   const list = Array.isArray(items) ? items.slice() : [];
   list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   return list
-    .map(it => `${String(it.name || '')} x${Number(it.quantity || 0)}（$${Number(it.price || 0)}）`)
-    .join('；');
+    .map(it => `${String(it.name || '')} x${Number(it.quantity || 0)}•$${Number(it.price || 0)}`)
+    .join('; ');
 }
 
 function doPost(e) {

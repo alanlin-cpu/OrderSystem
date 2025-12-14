@@ -110,7 +110,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                             })
                             .map((item, i) => (
                           <li key={i}>
-                            {item.name} × {item.quantity} (${item.price * item.quantity})
+                            {item.name} x{item.quantity} • ${item.price}
                             {item.sweetness && <span className="option"> • {item.sweetness}</span>}
                             {item.ice && <span className="option"> • {item.ice}</span>}
                           </li>
