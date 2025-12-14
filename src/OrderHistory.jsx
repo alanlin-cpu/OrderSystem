@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import ConfirmDialog from './components/ConfirmDialog'
 
-export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders }) {
+export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders, syncFailedOrders = new Set() }) {
   const [searchUser, setSearchUser] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
   const [settleOpen, setSettleOpen] = useState(false)
@@ -90,7 +90,12 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
               {filtered.map((order, idx) => (
                 <tr key={idx} className={`order-row ${isDeleted(order) ? 'deleted' : ''}`}>
                   <td className="time">{new Date(order.timestamp).toLocaleString('zh-TW')}</td>
-                  <td className="order-id">{order.orderID || '—'}</td>
+                  <td className="order-id">
+                    {order.orderID || '—'}
+                    {syncFailedOrders.has(order.orderID) && (
+                      <span title="本機保留，雲端同步失敗" style={{marginLeft: '6px', fontSize: '16px'}}>⚠️</span>
+                    )}
+                  </td>
                   <td className="user">{order.user}</td>
                   <td className="items">
                     <details>

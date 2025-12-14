@@ -13,6 +13,8 @@ export default function App() {
   const [orders, setOrders] = useState([])
   const [archives, setArchives] = useState([]) // settlement archives
   const [currentPage, setCurrentPage] = useState('menu') // 'menu' or 'history'
+  const [lastRemoteIDs, setLastRemoteIDs] = useState(new Set()) // 最近一次遠端同步的 orderID 集合
+  const [syncFailedOrders, setSyncFailedOrders] = useState(new Set()) // 同步失敗的訂單 orderID
 
   const [discount, setDiscount] = useState(null)
   const [promoCode, setPromoCode] = useState('')
@@ -127,6 +129,10 @@ export default function App() {
       }).filter(o => o.orderID && String(o.orderID).length > 5) // Filter out invalid rows
       if (parsed.length === 0) return 0
 
+      // 記錄此次遠端集合（不含已結算過濾），供後續 reconcile 使用
+      const remoteIDs = new Set(parsed.map(o => o.orderID).filter(Boolean))
+      setLastRemoteIDs(remoteIDs)
+
       // 排除已結算（archives）中的訂單，避免重複顯示
       const archivedIDs = new Set(
         (archives || [])
@@ -152,10 +158,10 @@ export default function App() {
         })
         return merged
       })
-      return added
+      return remoteIDs  // 返回遠端 ID 集合供 handleManualSync 使用
     } catch (e) {
       console.warn('載入雲端訂單失敗（可能需要將試算表發佈為公開）', e)
-      return 0
+      return new Set()
     }
   }
 
@@ -166,7 +172,14 @@ export default function App() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     const list = Array.isArray(data?.orders) ? data.orders : []
-    if (list.length === 0) return 0
+    if (list.length === 0) return new Set() // 返回空集合
+
+    // 記錄此次遠端集合（原始回傳），並直接返回以供 handleManualSync 使用
+    const remoteIDs = new Set(list.map(o => o.orderID).filter(Boolean))
+    setLastRemoteIDs(remoteIDs)
+    
+    // console 診斷：看看有多少筆有有效 orderID
+    // console.log('loadOrdersFromApi: raw count=%d, valid orderIDs=%d', list.length, remoteIDs.size)
 
     // Fallback: 若 items 為空但有 itemsStr，嘗試解析字符串（多層 fallback 應對舊資料轉換期）
     list.forEach(o => {
@@ -204,22 +217,55 @@ export default function App() {
       })
       return merged
     })
-    return added
+    return remoteIDs  // 返回遠端 ID 集合供 handleManualSync 使用
   }
 
 
   const handleManualSync = async () => {
     try {
-      const addedFromApi = await loadOrdersFromApi()
-      // 無 toast 提示，靜默同步
+      const remoteIDs = await loadOrdersFromApi()
+      // console.log('handleManualSync API: remoteIDs=%o', Array.from(remoteIDs))
+      
+      setOrders(prev => {
+        const localIDs = new Set(prev.map(o => o.orderID).filter(Boolean))
+        const nextFailed = new Set()
+        localIDs.forEach(id => { if (!remoteIDs.has(id)) nextFailed.add(id) })
+        // console.log('sync result: local=%o, remote=%o, failed=%o', Array.from(localIDs), Array.from(remoteIDs), Array.from(nextFailed))
+        setSyncFailedOrders(nextFailed)
+        return prev
+      })
     } catch (err) {
       console.warn('doGet 同步失敗，嘗試 gviz fallback', err)
       try {
-        const addedFromSheet = await loadOrdersFromSheet()
-        // 無 toast 提示，靜默同步
+        const remoteIDs = await loadOrdersFromSheet()
+        // console.log('handleManualSync gviz: remoteIDs=%o', Array.from(remoteIDs))
+        
+        setOrders(prev => {
+          const localIDs = new Set(prev.map(o => o.orderID).filter(Boolean))
+          const nextFailed = new Set()
+          localIDs.forEach(id => { if (!remoteIDs.has(id)) nextFailed.add(id) })
+          // console.log('sync result: local=%o, remote=%o, failed=%o', Array.from(localIDs), Array.from(remoteIDs), Array.from(nextFailed))
+          setSyncFailedOrders(nextFailed)
+          return prev
+        })
       } catch (err2) {
         console.warn('同步失敗', err2)
       }
+    }
+  }
+
+  // 依據集合差異決定警告：本機有、遠端沒有 → 顯示警告
+  // 此函數使用 lastRemoteIDs 狀態，故需由 handleManualSync 調用（在 setLastRemoteIDs 後）
+  const reconcileSyncFailuresFromRemote = (remoteIDs = lastRemoteIDs) => {
+    try {
+      const localIDs = new Set(orders.map(o => o.orderID).filter(Boolean))
+      const remote = remoteIDs || new Set()
+      const nextFailed = new Set()
+      localIDs.forEach(id => { if (!remote.has(id)) nextFailed.add(id) })
+      // console.log('reconcile: local=%o, remote=%o, failed=%o', Array.from(localIDs), Array.from(remote), Array.from(nextFailed))
+      setSyncFailedOrders(nextFailed)
+    } catch (e) {
+      console.warn('更新同步失敗標記時發生問題', e)
     }
   }
 
@@ -500,7 +546,7 @@ export default function App() {
       try { localStorage.setItem('orders', JSON.stringify([])) } catch {}
     }
 
-    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} />
+    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} syncFailedOrders={syncFailedOrders} />
   }
 
   // 菜單與購物車頁面
