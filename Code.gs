@@ -112,23 +112,33 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 正常新增訂單：品項改為人類可讀的排序字串
+    // 正常新增訂單
     const sheet = ss.getSheetByName(ORDERS_SHEET) || ss.insertSheet(ORDERS_SHEET);
-    const itemsStr = formatItemsHumanReadable(payload.items || []);
+    const itemsStr = formatItemsHumanReadable(payload.items || []);  // 人類可讀格式
+    const itemsJson = JSON.stringify(payload.items || []);           // JSON 格式（第 12 欄）
     const row = [
-      new Date(),                          // 時間
-      payload.orderID || '',               // 訂單編號
-      payload.user || '',                  // 員工
-      itemsStr,                            // 品項（人類可讀）
-      Number(payload.subtotal || 0),       // 小計
-      Number(payload.discountAmount || 0), // 折扣
-      Number(payload.total || 0),          // 總計
-      payload.paymentMethod || '',         // 付款
-      payload.promoCode || '',             // 折扣代碼
-      payload.deletedBy || '',             // 刪除者
-      payload.deletedAt || ''              // 刪除時間
+      new Date(),                          // 1 時間
+      payload.orderID || '',               // 2 訂單編號
+      payload.user || '',                  // 3 員工
+      itemsStr,                            // 4 品項（人類可讀：Coffee x1 · $50; ...）
+      Number(payload.subtotal || 0),       // 5 小計
+      Number(payload.discountAmount || 0), // 6 折扣
+      Number(payload.total || 0),          // 7 總計
+      payload.paymentMethod || '',         // 8 付款
+      payload.promoCode || '',             // 9 折扣代碼
+      payload.deletedBy || '',             // 10 刪除者
+      payload.deletedAt || '',             // 11 刪除時間
+      itemsJson                            // 12 品項 JSON（供 doGet 直接讀取）
     ];
     sheet.appendRow(row);
+
+    // 自動隱藏第 12 欄（itemsJson 只供 API 使用，無需用戶看見）
+    try {
+      const col12 = sheet.getRange(1, 12, sheet.getMaxRows(), 1);
+      sheet.hideColumns(12);
+    } catch (_) {
+      // 忽略隱藏欄位的錯誤（可能已隱藏）
+    }
 
     const logsSheet = ss.getSheetByName(LOGS_SHEET) || ss.insertSheet(LOGS_SHEET);
     const responseObj = { status: 'ok' };
@@ -182,7 +192,7 @@ function doGet(e) {
       const ts = row[0];           // 時間
       const orderID = row[1];      // 訂單編號
       const user = row[2];
-      const itemsStr = String(row[3] || '');
+      const itemsStr = String(row[3] || '');    // 第 4 欄：品項（人類可讀）
       const subtotal = Number(row[4] || 0);
       const discountAmount = Number(row[5] || 0);
       const total = Number(row[6] || 0);
@@ -190,23 +200,48 @@ function doGet(e) {
       const promoCode = row[8] || '';
       const deletedBy = row[9] || '';
       const deletedAt = row[10] || '';
+      const itemsJson = String(row[11] || '');  // 第 12 欄：品項 JSON（新架構）
 
-      // doGet 仍回傳 itemsStr，前端會自行解析為結構化 items
-      const items = []; // 保持與前端解析邏輯對齊
+      let items = [];
+      // 優先從第 12 欄讀取 JSON
+      if (itemsJson) {
+        try {
+          items = JSON.parse(itemsJson);
+        } catch (err) {
+          Logger.log('doGet: Failed to parse itemsJson, trying itemsStr fallback for orderID ' + orderID);
+          // Fallback：嘗試解析第 4 欄（若是 JSON 格式）
+          if (itemsStr && itemsStr.trim().startsWith('[')) {
+            try {
+              items = JSON.parse(itemsStr);
+            } catch (_) {
+              // itemsStr 不是 JSON，保留空陣列
+            }
+          }
+        }
+      } else if (itemsStr) {
+        // 第 12 欄為空，嘗試從第 4 欄讀取 JSON（相容舊資料格式轉換期）
+        if (itemsStr.trim().startsWith('[')) {
+          try {
+            items = JSON.parse(itemsStr);
+          } catch (_) {
+            // itemsStr 不是 JSON，保留空陣列
+          }
+        }
+      }
 
       orders.push({
         orderID: String(orderID || ''),
         timestamp: (ts && ts.toISOString) ? ts.toISOString() : String(ts || ''),
         user: String(user || ''),
         items: items,
-        itemsStr: itemsStr,
         subtotal: subtotal,
         discountAmount: discountAmount,
         total: total,
         paymentMethod: String(paymentMethod || 'cash'),
         promoCode: String(promoCode || ''),
         deletedBy: String(deletedBy || ''),
-        deletedAt: String(deletedAt || '')
+        deletedAt: String(deletedAt || ''),
+        itemsStr: String(itemsStr || '')  // 備用：也傳回人類可讀格式，給前端最後 fallback
       });
     }
 

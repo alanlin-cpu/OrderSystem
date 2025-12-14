@@ -167,6 +167,20 @@ export default function App() {
     const data = await res.json()
     const list = Array.isArray(data?.orders) ? data.orders : []
     if (list.length === 0) return 0
+
+    // Fallback: 若 items 為空但有 itemsStr，嘗試解析字符串（多層 fallback 應對舊資料轉換期）
+    list.forEach(o => {
+      if ((!o.items || o.items.length === 0) && o.itemsStr) {
+        try {
+          // 嘗試 JSON.parse（第 4 欄若儲存的是 JSON）
+          o.items = JSON.parse(o.itemsStr)
+        } catch (_) {
+          // itemsStr 不是 JSON 格式，保留空陣列
+          o.items = []
+        }
+      }
+    })
+
     const archivedIDs = new Set(
       (archives || [])
         .flatMap(a => Array.isArray(a.orders) ? a.orders : [])
@@ -192,6 +206,7 @@ export default function App() {
     })
     return added
   }
+
 
   const handleManualSync = async () => {
     try {
