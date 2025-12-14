@@ -4,5 +4,13 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   base: '/OrderSystem/',
   plugins: [react()],
+  server: {
+    middlewareMode: false,
+    hmr: {
+      protocol: 'ws',
+      host: 'localhost',
+      port: 5173
+    }
+  }
   // No TS forced entry; entry comes from index.html -> /src/main.jsx
 })
