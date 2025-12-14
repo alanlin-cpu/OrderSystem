@@ -269,13 +269,28 @@ export default function App() {
     }
   }
 
-  // 自動同步：視窗聚焦時同步（需登入後啟用）
+  // 首次載入（登入後）立即同步一次
   useEffect(() => {
     if (!user) return
+    handleManualSync()
+  }, [user])
+
+  // 自動同步：視窗聚焦時同步 + 定期同步每 30 秒（需登入後啟用）
+  useEffect(() => {
+    if (!user) return
+    
+    // 視窗聚焦時同步
     const onFocus = () => { handleManualSync() }
     window.addEventListener('focus', onFocus)
+    
+    // 定期同步：每 30 秒檢查一次（即使視窗未聚焦也會同步）
+    const syncInterval = setInterval(() => {
+      handleManualSync()
+    }, 30000) // 30 秒
+    
     return () => {
       window.removeEventListener('focus', onFocus)
+      clearInterval(syncInterval)
     }
   }, [user])
 
