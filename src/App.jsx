@@ -254,21 +254,6 @@ export default function App() {
     }
   }
 
-  // 依據集合差異決定警告：本機有、遠端沒有 → 顯示警告
-  // 此函數使用 lastRemoteIDs 狀態，故需由 handleManualSync 調用（在 setLastRemoteIDs 後）
-  const reconcileSyncFailuresFromRemote = (remoteIDs = lastRemoteIDs) => {
-    try {
-      const localIDs = new Set(orders.map(o => o.orderID).filter(Boolean))
-      const remote = remoteIDs || new Set()
-      const nextFailed = new Set()
-      localIDs.forEach(id => { if (!remote.has(id)) nextFailed.add(id) })
-      // console.log('reconcile: local=%o, remote=%o, failed=%o', Array.from(localIDs), Array.from(remote), Array.from(nextFailed))
-      setSyncFailedOrders(nextFailed)
-    } catch (e) {
-      console.warn('更新同步失敗標記時發生問題', e)
-    }
-  }
-
   // 首次載入（登入後）立即同步一次
   useEffect(() => {
     if (!user) return
