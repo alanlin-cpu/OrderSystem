@@ -28,8 +28,13 @@ function doPost(e) {
       const batchId = String(payload.batchId || '');
       const orders = Array.isArray(payload.orders) ? payload.orders : [];
 
-      // 寫入結算總表（含明細 JSON 欄位）
-      // 欄位：時間, 批次ID, 員工, 總筆數, 小計合計, 折扣合計, 總計合計, 備註, 明細JSON
+      // 確保 Settlement 表有正確表頭
+      if (settlementSheet.getLastRow() === 0) {
+        settlementSheet.appendRow(['時間', '批次ID', '員工', '總筆數', '小計合計', '折扣合計', '總計合計', '備註']);
+      }
+
+      // 寫入結算總表（不含明細 JSON）
+      // 欄位：時間, 批次ID, 員工, 總筆數, 小計合計, 折扣合計, 總計合計, 備註
       const summaryRow = [
         new Date(),
         batchId,
@@ -38,8 +43,7 @@ function doPost(e) {
         Number(payload.subtotalSum || 0),
         Number(payload.discountSum || 0),
         Number(payload.totalSum || 0),
-        String(payload.note || ''),
-        JSON.stringify(orders)
+        String(payload.note || '')
       ];
       settlementSheet.appendRow(summaryRow);
 

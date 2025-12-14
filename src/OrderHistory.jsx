@@ -200,7 +200,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                   <tbody>
                     {(() => {
                       const counts = {}
-                      activeOrders.forEach(o => o.items.forEach(it => { counts[it.name] = (counts[it.name]||0) + (it.quantity||1) }))
+                      filtered.forEach(o => o.items.forEach(it => { counts[it.name] = (counts[it.name]||0) + (it.quantity||1) }))
                       return Object.keys(counts).sort((a,b)=>String(a).localeCompare(String(b))).map((name) => (
                         <tr key={name}><td>{name}</td><td style={{textAlign:'right'}}>{counts[name]}</td></tr>
                       ))
@@ -213,7 +213,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                 <div className="bar-chart">
                   {(() => {
                     const counts = {}
-                    activeOrders.forEach(o => o.items.forEach(it => { counts[it.name] = (counts[it.name]||0) + (it.quantity||1) }))
+                    filtered.forEach(o => o.items.forEach(it => { counts[it.name] = (counts[it.name]||0) + (it.quantity||1) }))
                     const entries = Object.entries(counts).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))
                     const max = entries.reduce((m,[,v]) => Math.max(m,v), 1)
                     return entries.map(([name, v]) => (
@@ -236,7 +236,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                       const payTotals = {cash:0,card:0,linepay:0}
                       let totalDiscount = 0
                       let totalRevenue = 0
-                      activeOrders.forEach(o => {
+                      filtered.forEach(o => {
                         payTotals[o.paymentMethod] = (payTotals[o.paymentMethod]||0) + Number(o.total||0)
                         totalDiscount += Number(o.discountAmount||0)
                         totalRevenue += Number(o.total||0)

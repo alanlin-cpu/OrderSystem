@@ -108,7 +108,8 @@ export default function App() {
       if (start === -1 || end === -1) throw new Error('Unexpected response from gviz')
       const data = JSON.parse(text.slice(start, end + 1))
       const rows = data?.table?.rows || []
-      const parsed = rows.map(r => {
+      // Skip first row (header) and parse remaining rows
+      const parsed = rows.slice(1).map(r => {
         const c = r.c || []
         const ts = c[0]?.v || new Date().toISOString()  // 時間
         const orderID = c[1]?.v || computeOrderID(ts)    // 訂單編號
@@ -123,7 +124,7 @@ export default function App() {
         const deletedBy = c[9]?.v || ''
         const deletedAt = c[10]?.v || ''
         return { user: uname, items, subtotal, discountAmount, total, paymentMethod: payment, promoCode: promo, timestamp: ts, deletedBy, deletedAt, orderID }
-      })
+      }).filter(o => o.orderID && String(o.orderID).length > 5) // Filter out invalid rows
       if (parsed.length === 0) return 0
 
       // 排除已結算（archives）中的訂單，避免重複顯示
@@ -418,9 +419,11 @@ export default function App() {
     const sendSettlementToGas = async (settledOrders, note = '') => {
       const ts = new Date().toISOString()
       const batchId = computeSettlementID(ts)
+      console.log('Settlement orders:', settledOrders)
       const subtotalSum = settledOrders.reduce((s, o) => s + Number(o.subtotal || 0), 0)
       const discountSum = settledOrders.reduce((s, o) => s + Number(o.discountAmount || 0), 0)
       const totalSum = settledOrders.reduce((s, o) => s + Number(o.total || 0), 0)
+      console.log('Settlement sums:', { subtotalSum, discountSum, totalSum, count: settledOrders.length })
 
       const payload = {
         action: 'settlement',
