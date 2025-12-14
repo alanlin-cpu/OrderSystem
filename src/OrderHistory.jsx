@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import ConfirmDialog from './components/ConfirmDialog'
 
-export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders, onSync }) {
+export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders }) {
   const [searchUser, setSearchUser] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
   const [settleOpen, setSettleOpen] = useState(false)
@@ -37,7 +37,6 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
       <div className="order-history-header">
         <h2>訂單記錄</h2>
         <div style={{display:'flex', gap:8}}>
-          {onSync && <button className="btn-nav-history" onClick={onSync}>🔁 同步訂單</button>}
           <button className="btn-back" onClick={onBack}>← 返回</button>
         </div>
       </div>
@@ -97,13 +96,26 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                     <details>
                       <summary>{order.items.length} 項</summary>
                       <ul className="item-details">
-                        {order.items.map((item, i) => (
+                        {(() => {
+                          const original = order.items.map((it, idx) => ({...it, __idx: idx}))
+                          // 依首次出現的品項名稱順序分組（穩定分組，不做全域字母排序）
+                          const nameOrder = []
+                          original.forEach(it => { if (!nameOrder.includes(it.name)) nameOrder.push(it.name) })
+                          return original
+                            .sort((a,b) => {
+                              const ai = nameOrder.indexOf(a.name)
+                              const bi = nameOrder.indexOf(b.name)
+                              if (ai !== bi) return ai - bi
+                              return a.__idx - b.__idx
+                            })
+                            .map((item, i) => (
                           <li key={i}>
                             {item.name} × {item.quantity} (${item.price * item.quantity})
                             {item.sweetness && <span className="option"> • {item.sweetness}</span>}
                             {item.ice && <span className="option"> • {item.ice}</span>}
                           </li>
-                        ))}
+                            ))
+                        })()}
                       </ul>
                     </details>
                   </td>
@@ -189,7 +201,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                     {(() => {
                       const counts = {}
                       activeOrders.forEach(o => o.items.forEach(it => { counts[it.name] = (counts[it.name]||0) + (it.quantity||1) }))
-                      return Object.keys(counts).map((name) => (
+                      return Object.keys(counts).sort((a,b)=>String(a).localeCompare(String(b))).map((name) => (
                         <tr key={name}><td>{name}</td><td style={{textAlign:'right'}}>{counts[name]}</td></tr>
                       ))
                     })()}
@@ -202,7 +214,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                   {(() => {
                     const counts = {}
                     activeOrders.forEach(o => o.items.forEach(it => { counts[it.name] = (counts[it.name]||0) + (it.quantity||1) }))
-                    const entries = Object.entries(counts)
+                    const entries = Object.entries(counts).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))
                     const max = entries.reduce((m,[,v]) => Math.max(m,v), 1)
                     return entries.map(([name, v]) => (
                       <div className="bar-row" key={name}>

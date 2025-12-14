@@ -1,6 +1,19 @@
 const SPREADSHEET_ID = '1m2TkzWJb1U-jTm6JKDAnmM-WsHY1NbMlxQwVa_q-jx8';
-const ORDERS_SHEET = 'Orders';
+const ORDERS_SHEET = 'orders';
 const LOGS_SHEET = 'Logs';
+
+/**
+ * 將 items 轉為人類可讀的排序字串：
+ * 依 `name` 排序，格式為：
+ * "品項名 x數量（$單價）"；以全形分號（；）分隔
+ */
+function formatItemsHumanReadable(items) {
+  const list = Array.isArray(items) ? items.slice() : [];
+  list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  return list
+    .map(it => `${String(it.name || '')} x${Number(it.quantity || 0)}（$${Number(it.price || 0)}）`)
+    .join('；');
+}
 
 function doPost(e) {
   try {
@@ -8,6 +21,66 @@ function doPost(e) {
     const payload = raw ? JSON.parse(raw) : {};
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // 結算：寫入 Settlement 總表、建立批次明細工作表、清空 orders 內容
+    if (payload.action === 'settlement') {
+      const settlementSheet = ss.getSheetByName('Settlement') || ss.insertSheet('Settlement');
+      const batchId = String(payload.batchId || '');
+      const orders = Array.isArray(payload.orders) ? payload.orders : [];
+
+      // 寫入結算總表（含明細 JSON 欄位）
+      // 欄位：時間, 批次ID, 員工, 總筆數, 小計合計, 折扣合計, 總計合計, 備註, 明細JSON
+      const summaryRow = [
+        new Date(),
+        batchId,
+        String(payload.user || ''),
+        Number(payload.count || orders.length || 0),
+        Number(payload.subtotalSum || 0),
+        Number(payload.discountSum || 0),
+        Number(payload.totalSum || 0),
+        String(payload.note || ''),
+        JSON.stringify(orders)
+      ];
+      settlementSheet.appendRow(summaryRow);
+
+      // 建立批次明細工作表（名稱為批次ID），逐筆寫入人類可讀的品項字串
+      const detailSheetName = batchId || `Settlement_${Utilities.getUuid()}`;
+      const detailSheet = ss.getSheetByName(detailSheetName) || ss.insertSheet(detailSheetName);
+      // 明細表頭
+      if (detailSheet.getLastRow() === 0) {
+        detailSheet.appendRow(['時間', '訂單編號', '員工', '品項', '小計', '折扣', '總計', '付款方式', '折扣代碼', '刪除者', '刪除時間']);
+      }
+      orders.forEach(o => {
+        const itemsStr = formatItemsHumanReadable(o.items || []);
+        detailSheet.appendRow([
+          new Date(o.timestamp || new Date()),
+          String(o.orderID || ''),
+          String(o.user || ''),
+          itemsStr,
+          Number(o.subtotal || 0),
+          Number(o.discountAmount || 0),
+          Number(o.total || 0),
+          String(o.paymentMethod || ''),
+          String(o.promoCode || ''),
+          String(o.deletedBy || ''),
+          String(o.deletedAt || '')
+        ]);
+      });
+
+      // 清空 orders 工作表內容（保留表頭第1列）
+      const ordersSheet = ss.getSheetByName(ORDERS_SHEET) || ss.insertSheet(ORDERS_SHEET);
+      const lastRow = ordersSheet.getLastRow();
+      if (lastRow > 1) {
+        ordersSheet.getRange(2, 1, lastRow - 1, ordersSheet.getLastColumn()).clearContent();
+      }
+
+      const logsSheet = ss.getSheetByName(LOGS_SHEET) || ss.insertSheet(LOGS_SHEET);
+      logsSheet.appendRow([ new Date(), 'doPost_settlement', raw, JSON.stringify({ status: 'ok', batchId }) ]);
+
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'ok', batchId }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
 
     // 若是刪除操作，使用 orderID 尋找對應行，更新 deletedBy / deletedAt
     if (payload.action === 'delete') {
@@ -35,14 +108,14 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 正常新增訂單的邏輯
+    // 正常新增訂單：品項改為人類可讀的排序字串
     const sheet = ss.getSheetByName(ORDERS_SHEET) || ss.insertSheet(ORDERS_SHEET);
-    const itemsJson = JSON.stringify(payload.items || []);
+    const itemsStr = formatItemsHumanReadable(payload.items || []);
     const row = [
       new Date(),                          // 時間
       payload.orderID || '',               // 訂單編號
       payload.user || '',                  // 員工
-      itemsJson,                           // 品項
+      itemsStr,                            // 品項（人類可讀）
       Number(payload.subtotal || 0),       // 小計
       Number(payload.discountAmount || 0), // 折扣
       Number(payload.total || 0),          // 總計
@@ -105,7 +178,7 @@ function doGet(e) {
       const ts = row[0];           // 時間
       const orderID = row[1];      // 訂單編號
       const user = row[2];
-      const itemsJson = row[3];
+      const itemsStr = String(row[3] || '');
       const subtotal = Number(row[4] || 0);
       const discountAmount = Number(row[5] || 0);
       const total = Number(row[6] || 0);
@@ -114,14 +187,15 @@ function doGet(e) {
       const deletedBy = row[9] || '';
       const deletedAt = row[10] || '';
 
-      let items = [];
-      try { items = JSON.parse(itemsJson || '[]'); } catch (_) {}
+      // doGet 仍回傳 itemsStr，前端會自行解析為結構化 items
+      const items = []; // 保持與前端解析邏輯對齊
 
       orders.push({
         orderID: String(orderID || ''),
         timestamp: (ts && ts.toISOString) ? ts.toISOString() : String(ts || ''),
         user: String(user || ''),
         items: items,
+        itemsStr: itemsStr,
         subtotal: subtotal,
         discountAmount: discountAmount,
         total: total,

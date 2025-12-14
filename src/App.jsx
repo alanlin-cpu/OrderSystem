@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { GAS_URL, SHEET_ID, SHEET_NAME } from './config'
-import { computeOrderID } from './utils'
+import { computeOrderID, computeSettlementID } from './utils'
 import ToastContainer from './components/Toast'
 import './App.css'
 import OrderHistory from './OrderHistory'
@@ -415,25 +415,84 @@ export default function App() {
       })
     }
 
-    const handleSettleOrders = (indicesToSettle) => {
-      // collect settled orders from current orders
+    const sendSettlementToGas = async (settledOrders, note = '') => {
+      const ts = new Date().toISOString()
+      const batchId = computeSettlementID(ts)
+      const subtotalSum = settledOrders.reduce((s, o) => s + Number(o.subtotal || 0), 0)
+      const discountSum = settledOrders.reduce((s, o) => s + Number(o.discountAmount || 0), 0)
+      const totalSum = settledOrders.reduce((s, o) => s + Number(o.total || 0), 0)
+
+      const payload = {
+        action: 'settlement',
+        batchId,
+        user,
+        count: settledOrders.length,
+        subtotalSum,
+        discountSum,
+        totalSum,
+        note,
+        orders: settledOrders
+      }
+
+      // 同步刪除狀態（可選）：把本地被標記 deleted 的訂單上傳 GAS
+      const deletedOrders = settledOrders.filter(o => o.deleted || o.deletedAt)
+      deletedOrders.forEach(o => {
+        const delPayload = {
+          action: 'delete',
+          orderID: o.orderID || computeOrderID(o.timestamp),
+          deletedBy: o.deletedBy || user,
+          deletedAt: o.deletedAt || ts
+        }
+        fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(delPayload)
+        }).catch(() => {})
+      })
+
+      // 送 Settlement 到 GAS（no-cors 背景）
+      fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      }).catch(err => console.warn('結算上傳失敗', err))
+
+      return { batchId }
+    }
+
+    const handleSettleOrders = async (indicesToSettle) => {
       const settled = indicesToSettle.map(i => orders[i]).filter(Boolean)
       if (settled.length === 0) return
-      // archive settled orders
+
+      await sendSettlementToGas(settled)
+
+      // archive locally
       setArchives((prev) => [...prev, { id: Date.now(), timestamp: new Date().toISOString(), orders: settled }])
-      // remove settled orders from active orders so they no longer show
+      // remove settled orders from active orders
       setOrders((prev) => prev.filter((_, idx) => !indicesToSettle.includes(idx)))
+
+      // 同步更新 localStorage：orders 清空相對應項目
+      try {
+        const remaining = orders.filter((_, idx) => !indicesToSettle.includes(idx))
+        localStorage.setItem('orders', JSON.stringify(remaining))
+      } catch {}
     }
 
-    const handleSettleAllOrders = () => {
-      // archive all orders (including ones marked deleted) and clear the orders list
+    const handleSettleAllOrders = async () => {
       if (!orders || orders.length === 0) return
       const all = [...orders]
+
+      await sendSettlementToGas(all)
+
+      // archive and clear locally
       setArchives((prev) => [...prev, { id: Date.now(), timestamp: new Date().toISOString(), orders: all }])
       setOrders([])
+      try { localStorage.setItem('orders', JSON.stringify([])) } catch {}
     }
 
-    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} onSync={handleManualSync} />
+    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} />
   }
 
   // 菜單與購物車頁面
@@ -443,7 +502,6 @@ export default function App() {
         <h2 className="header">歡迎 {user}</h2>
         <div style={{display:'flex', gap:8}}>
           <button className="btn-nav-history" onClick={() => setCurrentPage('history')}>📋 訂單記錄</button>
-          <button className="btn-nav-history" onClick={handleManualSync}>🔁 同步訂單</button>
           <button className="btn-nav-history" onClick={handleLogout}>🚪 登出</button>
         </div>
       </div>
@@ -477,7 +535,20 @@ export default function App() {
             <div className="empty-cart">購物車為空</div>
           ) : (
             <ul className="cart-list">
-              {cart.map((entry, index) => (
+              {(() => {
+                const original = cart.map((entry, idx) => ({...entry, __idx: idx}))
+                const nameOrder = []
+                original.forEach(e => { const n = e.item?.name; if (n && !nameOrder.includes(n)) nameOrder.push(n) })
+                return original
+                  .sort((a,b) => {
+                    const an = a.item?.name || ''
+                    const bn = b.item?.name || ''
+                    const ai = nameOrder.indexOf(an)
+                    const bi = nameOrder.indexOf(bn)
+                    if (ai !== bi) return ai - bi
+                    return a.__idx - b.__idx
+                  })
+                  .map((entry, index) => (
                 <li key={index} className="cart-item">
                   <span>
                     {entry.item.name} - ${entry.item.price} × {entry.quantity}<br />
@@ -489,7 +560,8 @@ export default function App() {
                     <button className="quantity-btn quantity-btn-plus" onClick={() => updateQuantity(index, 1)}>+</button>
                   </div>
                 </li>
-              ))}
+                  ))
+              })()}
             </ul>
           )}
 
