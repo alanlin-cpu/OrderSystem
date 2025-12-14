@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
 import ConfirmDialog from './components/ConfirmDialog'
 
-export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders }) {
+export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders, onSync }) {
   const [searchUser, setSearchUser] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
   const [settleOpen, setSettleOpen] = useState(false)
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null)
+
+  const isDeleted = (o) => o.deleted || !!o.deletedAt
 
   // 篩選訂單（只顯示未刪除的訂單搜尋結果，但表格顯示所有訂單）
   const filtered = orders.filter(order => {
@@ -20,13 +22,13 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
   }
 
   // 統計：只計算未刪除的訂單
-  const activeOrders = filtered.filter(o => !o.deleted)
+  const activeOrders = filtered.filter(o => !isDeleted(o))
 
   // helper: get active indices within original orders array matching current filters
   const activeIndices = orders.reduce((acc, o, i) => {
     const userMatch = !searchUser || o.user.toLowerCase().includes(searchUser.toLowerCase())
     const paymentMatch = !filterPayment || o.paymentMethod === filterPayment
-    if (userMatch && paymentMatch && !o.deleted) acc.push(i)
+    if (userMatch && paymentMatch && !isDeleted(o)) acc.push(i)
     return acc
   }, [])
 
@@ -34,7 +36,10 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
     <div className="order-history-container">
       <div className="order-history-header">
         <h2>訂單記錄</h2>
-        <button className="btn-back" onClick={onBack}>← 返回</button>
+        <div style={{display:'flex', gap:8}}>
+          {onSync && <button className="btn-nav-history" onClick={onSync}>🔁 同步訂單</button>}
+          <button className="btn-back" onClick={onBack}>← 返回</button>
+        </div>
       </div>
 
       {/* 搜尋與篩選 */}
@@ -78,24 +83,16 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                 <th>折扣</th>
                 <th>總計</th>
                 <th>付款</th>
+                <th>刪除者及時間</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((order, idx) => (
-                <tr key={idx} className={`order-row ${order.deleted ? 'deleted' : ''}`}>
+                <tr key={idx} className={`order-row ${isDeleted(order) ? 'deleted' : ''}`}>
                   <td className="time">{new Date(order.timestamp).toLocaleString('zh-TW')}</td>
                   <td className="order-id">{order.orderID || '—'}</td>
-                  <td className="user">
-                    {order.user} 
-                    {order.deleted && (
-                      <span className="deleted-badge">
-                        【已刪除】
-                        {order.deletedBy && <><br/><small>刪除者: {order.deletedBy}</small></>}
-                        {order.deletedAt && <><br/><small>{new Date(order.deletedAt).toLocaleString('zh-TW')}</small></>}
-                      </span>
-                    )}
-                  </td>
+                  <td className="user">{order.user}</td>
                   <td className="items">
                     <details>
                       <summary>{order.items.length} 項</summary>
@@ -123,8 +120,17 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                   </td>
                   <td className="total">${order.total}</td>
                   <td className="payment">{order.paymentMethod === 'cash' ? '現金' : order.paymentMethod === 'card' ? '信用卡' : 'Line Pay'}</td>
+                  <td className="deleted-info">
+                    {isDeleted(order) || order.deletedBy ? (
+                      <div className="deleted-badge">
+                        <div>【已刪除】</div>
+                        {order.deletedBy && <div><small>刪除者: {order.deletedBy}</small></div>}
+                        {order.deletedAt && <div><small>{new Date(order.deletedAt).toLocaleString('zh-TW')}</small></div>}
+                      </div>
+                    ) : '—'}
+                  </td>
                   <td className="actions">
-                    {!order.deleted && (
+                    {!isDeleted(order) && (
                       <button className="btn-delete" onClick={() => deleteOrder(idx)}>🗑 刪除</button>
                     )}
                   </td>

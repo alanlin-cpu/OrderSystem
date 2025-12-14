@@ -51,8 +51,14 @@ export default function App() {
       if (Array.isArray(savedOrders) && savedOrders.length > 0) {
         setOrders(savedOrders)
       } else {
-        // 若本地沒有訂單，嘗試從 Google Sheet 載入
-        loadOrdersFromSheet()
+        // 若本地沒有訂單，優先嘗試從 Apps Script API (doGet) 載入，失敗則退回 gviz
+        (async () => {
+          try {
+            await loadOrdersFromApi()
+          } catch (_) {
+            loadOrdersFromSheet()
+          }
+        })()
       }
       if (Array.isArray(savedArchives)) setArchives(savedArchives)
     } catch (e) {
@@ -118,11 +124,108 @@ export default function App() {
         const deletedAt = c[10]?.v || ''
         return { user: uname, items, subtotal, discountAmount, total, paymentMethod: payment, promoCode: promo, timestamp: ts, deletedBy, deletedAt, orderID }
       })
-      if (parsed.length > 0) setOrders(parsed)
+      if (parsed.length === 0) return 0
+
+      // 排除已結算（archives）中的訂單，避免重複顯示
+      const archivedIDs = new Set(
+        (archives || [])
+          .flatMap(a => Array.isArray(a.orders) ? a.orders : [])
+          .map(o => o.orderID)
+          .filter(Boolean)
+      )
+      const filtered = parsed.filter(o => o.orderID && !archivedIDs.has(o.orderID))
+      if (filtered.length === 0) return 0
+
+      let added = 0
+      setOrders((prev) => {
+        const merged = [...prev]
+        filtered.forEach(o => {
+          const idx = merged.findIndex(x => x.orderID === o.orderID)
+          if (idx >= 0) {
+            // 保留較新欄位（例如 deleted 狀態）
+            merged[idx] = { ...merged[idx], ...o }
+          } else {
+            merged.push(o)
+            added += 1
+          }
+        })
+        return merged
+      })
+      return added
     } catch (e) {
       console.warn('載入雲端訂單失敗（可能需要將試算表發佈為公開）', e)
+      return 0
     }
   }
+
+  async function loadOrdersFromApi() {
+    // 期望 GAS doGet 回傳 JSON: { orders: [ { orderID, timestamp, user, items, subtotal, discountAmount, total, paymentMethod, promoCode, deletedBy, deletedAt } ] }
+    const url = `${GAS_URL}?action=get`
+    const res = await fetch(url, { method: 'GET' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    const list = Array.isArray(data?.orders) ? data.orders : []
+    if (list.length === 0) return 0
+    const archivedIDs = new Set(
+      (archives || [])
+        .flatMap(a => Array.isArray(a.orders) ? a.orders : [])
+        .map(o => o.orderID)
+        .filter(Boolean)
+    )
+    const incoming = list.filter(o => o.orderID && !archivedIDs.has(o.orderID))
+    if (incoming.length === 0) return 0
+
+    let added = 0
+    setOrders((prev) => {
+      const merged = [...prev]
+      incoming.forEach(o => {
+        const idx = merged.findIndex(x => x.orderID === o.orderID)
+        if (idx >= 0) {
+          merged[idx] = { ...merged[idx], ...o }
+        } else {
+          merged.push(o)
+          added += 1
+        }
+      })
+      return merged
+    })
+    return added
+  }
+
+  const handleManualSync = async () => {
+    pushToast('開始同步雲端訂單…', 'info', 2000)
+    try {
+      const addedFromApi = await loadOrdersFromApi()
+      if (addedFromApi > 0) {
+        pushToast(`同步成功：新增 ${addedFromApi} 筆`, 'success')
+        return
+      }
+      pushToast('同步完成：沒有新訂單', 'success')
+    } catch (err) {
+      console.warn('doGet 同步失敗，嘗試 gviz fallback', err)
+      try {
+        const addedFromSheet = await loadOrdersFromSheet()
+        if (addedFromSheet > 0) {
+          pushToast(`gviz 同步成功：新增 ${addedFromSheet} 筆`, 'success')
+        } else {
+          pushToast('gviz 同步完成：沒有新訂單', 'success')
+        }
+      } catch (err2) {
+        console.warn('同步失敗', err2)
+        pushToast('同步失敗：請檢查試算表權限與網路', 'error')
+      }
+    }
+  }
+
+  // 自動同步：視窗聚焦時同步（需登入後啟用）
+  useEffect(() => {
+    if (!user) return
+    const onFocus = () => { handleManualSync() }
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [user])
 
   const promoOptions = {
     A: { type: 'percent', value: 10 }, // 10% off
@@ -294,14 +397,13 @@ export default function App() {
       })
 
       // 同步到 Google Sheet，使用 orderID 找到對應行更新刪除者資訊
-      const GAS_URL = 'https://script.google.com/macros/s/AKfycbyPIeUwfSrcA6r_ULVVVzITfsJj02-CUaWeGLxQK8IfKZZTkjy6uCZQoCxTko2gv_Qf/exec'
       const deletePayload = {
         action: 'delete',
         orderID: orderToDelete.orderID || computeOrderID(orderToDelete.timestamp),
         deletedBy: user,
         deletedAt
       }
-      
+
       fetch(GAS_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -309,6 +411,7 @@ export default function App() {
         body: JSON.stringify(deletePayload)
       }).catch(err => {
         console.error('同步刪除狀態到 Google Sheet 失敗:', err)
+        pushToast('刪除已標記，本機完成；雲端同步失敗', 'error')
       })
     }
 
@@ -330,7 +433,7 @@ export default function App() {
       setOrders([])
     }
 
-    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} />
+    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} onSync={handleManualSync} />
   }
 
   // 菜單與購物車頁面
@@ -340,6 +443,7 @@ export default function App() {
         <h2 className="header">歡迎 {user}</h2>
         <div style={{display:'flex', gap:8}}>
           <button className="btn-nav-history" onClick={() => setCurrentPage('history')}>📋 訂單記錄</button>
+          <button className="btn-nav-history" onClick={handleManualSync}>🔁 同步訂單</button>
           <button className="btn-nav-history" onClick={handleLogout}>🚪 登出</button>
         </div>
       </div>

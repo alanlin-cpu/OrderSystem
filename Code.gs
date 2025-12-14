@@ -85,3 +85,71 @@ function doOptions(e) {
     .createTextOutput('')
     .setMimeType(ContentService.MimeType.TEXT);
 }
+
+// 讀取訂單（JSON），供前端 `loadOrdersFromApi()` 使用
+function doGet(e) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(ORDERS_SHEET);
+    if (!sheet) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ orders: [] }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const values = sheet.getDataRange().getValues();
+    const orders = [];
+    // 假設第一列是表頭，從第 2 列開始
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      const ts = row[0];           // 時間
+      const orderID = row[1];      // 訂單編號
+      const user = row[2];
+      const itemsJson = row[3];
+      const subtotal = Number(row[4] || 0);
+      const discountAmount = Number(row[5] || 0);
+      const total = Number(row[6] || 0);
+      const paymentMethod = row[7] || 'cash';
+      const promoCode = row[8] || '';
+      const deletedBy = row[9] || '';
+      const deletedAt = row[10] || '';
+
+      let items = [];
+      try { items = JSON.parse(itemsJson || '[]'); } catch (_) {}
+
+      orders.push({
+        orderID: String(orderID || ''),
+        timestamp: (ts && ts.toISOString) ? ts.toISOString() : String(ts || ''),
+        user: String(user || ''),
+        items: items,
+        subtotal: subtotal,
+        discountAmount: discountAmount,
+        total: total,
+        paymentMethod: String(paymentMethod || 'cash'),
+        promoCode: String(promoCode || ''),
+        deletedBy: String(deletedBy || ''),
+        deletedAt: String(deletedAt || '')
+      });
+    }
+
+    // 可選：支援查詢參數過濾，例如只回未刪除
+    // if (e && e.parameter && e.parameter.onlyActive === 'true') {
+    //   orders = orders.filter(o => !o.deletedAt);
+    // }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ orders }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    const errObj = { status: 'error', message: String(err) };
+    try {
+      const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const logsSheet = ss.getSheetByName(LOGS_SHEET) || ss.insertSheet(LOGS_SHEET);
+      logsSheet.appendRow([ new Date(), 'doGet_error', JSON.stringify(e && e.parameter || {}), JSON.stringify(errObj) ]);
+    } catch (e2) { /* ignore logging errors */ }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ orders: [], error: errObj.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
