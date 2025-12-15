@@ -22,7 +22,7 @@ export default function App() {
   const [discount, setDiscount] = useState(null)
   const [promoCode, setPromoCode] = useState('')
   const [promoMessage, setPromoMessage] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [paymentAmounts, setPaymentAmounts] = useState({}) // 付款方式與金額對映 { cash: 100, card: 50 }
 
   // Toast state
   const [toasts, setToasts] = useState([]) // { id, type: 'success'|'error'|'info', message }
@@ -57,9 +57,6 @@ export default function App() {
     try {
       const savedUser = localStorage.getItem('user')
       if (savedUser) setUser(savedUser)
-
-      const savedPayment = localStorage.getItem('paymentMethod')
-      if (savedPayment) setPaymentMethod(savedPayment)
 
       const savedOrdersRaw = JSON.parse(localStorage.getItem('orders') || '[]')
       const savedOrders = Array.isArray(savedOrdersRaw)
@@ -111,13 +108,7 @@ export default function App() {
     }
   }, [user])
 
-  useEffect(() => {
-    try {
-      if (paymentMethod) localStorage.setItem('paymentMethod', paymentMethod)
-    } catch (e) {
-      console.warn('儲存付款方式失敗', e)
-    }
-  }, [paymentMethod])
+
 
   async function loadOrdersFromSheet() {
     try {
@@ -372,6 +363,13 @@ export default function App() {
   const submitOrder = async () => {
     if (cart.length === 0) { alert('購物車為空'); return }
 
+    // 驗證實收金額
+    const totalReceived = Object.values(paymentAmounts).reduce((sum, amt) => sum + Number(amt || 0), 0)
+    if (totalReceived < total) {
+      pushToast(`實收金額不足！應收 $${total}，實收 $${totalReceived}，差額 $${total - totalReceived}`, 'error', 5000)
+      return
+    }
+
     const itemsForPayload = cart.map(entry => ({
       ...entry.item,
       quantity: entry.quantity,
@@ -383,6 +381,13 @@ export default function App() {
     const now = new Date()
     const orderID = computeOrderID(now)
 
+    const changeAmount = totalReceived > 0 ? Math.max(0, totalReceived - total) : 0
+    
+    // 付款細項字串，確保傳到 GAS 也能看到各支付方式的實收
+    const paymentBreakdown = Object.entries(paymentAmounts)
+      .map(([method, amt]) => `${method}:${Number(amt || 0)}`)
+      .join('; ')
+
     const payload = {
       orderID,                              // 訂單編號
       timestamp: now.toISOString(),         // 用於前端顯示和 Sheet 第一列（時間）
@@ -391,7 +396,10 @@ export default function App() {
       subtotal,
       discountAmount,
       total,
-      paymentMethod,
+      paymentMethod: paymentBreakdown || Object.keys(paymentAmounts).join(', '), // 兼容舊欄位，含金額
+      paymentAmounts,                       // 各付款方式的金額明細（物件）
+      receivedAmount: totalReceived,        // 總收取金額
+      changeAmount,                         // 找續金額
       promoCode: discount ? promoCode.trim().toUpperCase() : '',
       deletedBy: null,    // 初始未刪除
       deletedAt: null     // 初始未刪除
@@ -413,6 +421,7 @@ export default function App() {
     setDiscount(null)
     setPromoCode('')
     setPromoMessage('')
+    setPaymentAmounts({})
 
     // 異步在背景傳送到 Google Apps Script（不阻擋 UI）
     // GAS_URL from config
@@ -604,8 +613,9 @@ export default function App() {
             />
 
             <PaymentSelector
-              selectedPayment={paymentMethod}
-              onPaymentChange={setPaymentMethod}
+              paymentAmounts={paymentAmounts}
+              onPaymentAmountsChange={setPaymentAmounts}
+              total={total}
             />
 
             <div className="total">總計: ${total}</div>

@@ -10,11 +10,20 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
   const isDeleted = (o) => o.deleted || !!o.deletedAt
 
   // 篩選訂單 - 使用 useMemo 快取
+  const paymentMap = { cash: '現金', card: '信用卡', linepay: 'Line Pay' }
+
   const filtered = useMemo(() => {
     return orders.filter(order => {
       const userMatch = !searchUser || order.user.toLowerCase().includes(searchUser.toLowerCase())
-      const paymentMatch = !filterPayment || order.paymentMethod === filterPayment
-      return userMatch && paymentMatch
+      if (!filterPayment) return userMatch
+
+      // 新格式：paymentAmounts 可能存在多個付款方式
+      if (order.paymentAmounts && typeof order.paymentAmounts === 'object') {
+        return Object.keys(order.paymentAmounts).includes(filterPayment) && userMatch
+      }
+
+      // 舊格式：單一 paymentMethod 字串
+      return userMatch && order.paymentMethod === filterPayment
     })
   }, [orders, searchUser, filterPayment])
 
@@ -117,7 +126,18 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                     )}
                   </td>
                   <td className="total">${order.total}</td>
-                  <td className="payment">{order.paymentMethod === 'cash' ? '現金' : order.paymentMethod === 'card' ? '信用卡' : 'Line Pay'}</td>
+                  <td className="payment">
+                    {order.paymentAmounts && Object.keys(order.paymentAmounts).length > 0 ? (
+                      <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                        {Object.entries(order.paymentAmounts).map(([method, amount]) => (
+                          <span key={method}>{paymentMap[method] || method}: ${amount}</span>
+                        ))}
+                        <small style={{color:'#555'}}>實收：${Object.values(order.paymentAmounts).reduce((s,a)=>s+Number(a||0),0)}</small>
+                      </div>
+                    ) : (
+                      paymentMap[order.paymentMethod] || order.paymentMethod || '-'
+                    )}
+                  </td>
                   <td className="deleted-info">
                     {isDeleted(order) || order.deletedBy ? (
                       <div className="deleted-badge">
@@ -195,7 +215,13 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                         o.items.forEach(it => { 
                           counts[it.name] = (counts[it.name]||0) + (it.quantity||1) 
                         })
-                        payTotals[o.paymentMethod] = (payTotals[o.paymentMethod]||0) + Number(o.total||0)
+                        if (o.paymentAmounts && typeof o.paymentAmounts === 'object') {
+                          Object.entries(o.paymentAmounts).forEach(([method, amt]) => {
+                            payTotals[method] = (payTotals[method]||0) + Number(amt||0)
+                          })
+                        } else {
+                          payTotals[o.paymentMethod] = (payTotals[o.paymentMethod]||0) + Number(o.total||0)
+                        }
                         totalDiscount += Number(o.discountAmount||0)
                         totalRevenue += Number(o.total||0)
                       })

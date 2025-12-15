@@ -255,6 +255,149 @@
   background: #f9f9f9;
 }
 
+/* 付款金額輸入 */
+.payment-selector-group {
+  margin: 20px 0;
+}
+
+.payment-amounts-container {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f9f9f9;
+  border-radius: 10px;
+  border: 1px solid #e0e0e0;
+}
+
+.payment-amounts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.payment-amount-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.payment-amount-label {
+  font-weight: 500;
+  color: #444;
+  min-width: 100px;
+  font-size: 0.95em;
+}
+
+.payment-amount-input-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  max-width: 180px;
+  min-width: 0;
+}
+
+.quick-fill-btn {
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  background: #f3f4f6;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85em;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.quick-fill-btn:hover {
+  border-color: #2196f3;
+  background: #e3f2fd;
+}
+
+.currency-symbol {
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #666;
+}
+
+.payment-amount-input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 1em;
+  font-weight: 500;
+  transition: border-color 0.2s;
+  text-align: right;
+  box-sizing: border-box;
+}
+
+.payment-amount-input:focus {
+  outline: none;
+  border-color: #2196f3;
+}
+
+/* 付款摘要 */
+.payment-summary {
+  border-top: 2px solid #e0e0e0;
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.payment-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1em;
+}
+
+.summary-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.summary-value {
+  font-weight: bold;
+  color: #333;
+  font-size: 1.1em;
+}
+
+.summary-value.highlight {
+  color: #2196f3;
+  font-size: 1.2em;
+}
+
+.change-row {
+  margin-top: 4px;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 1.05em;
+}
+
+.change-row.success {
+  background: #e8f5e9;
+}
+
+.change-row.success .summary-value {
+  color: #2e7d32;
+  font-size: 1.3em;
+}
+
+.change-row.insufficient {
+  background: #ffebee;
+}
+
+.change-row.insufficient .summary-label,
+.change-row.insufficient .summary-value {
+  color: #c62828;
+  font-weight: bold;
+}
+
 /* 彈出視窗 */
 .modal-overlay {
   position: fixed;
@@ -917,6 +1060,57 @@
   .selection-btn {
     padding: 12px 8px;
     font-size: 0.9em;
+  }
+
+  /* 付款金額輸入 */
+  .payment-selector-group {
+    margin: 16px 0;
+  }
+
+  .payment-amounts-container {
+    padding: 12px;
+  }
+
+  .payment-amount-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .payment-amount-label {
+    min-width: auto;
+    font-size: 0.9em;
+  }
+
+  .payment-amount-input-field {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .quick-fill-btn {
+    padding: 6px 8px;
+    font-size: 0.8em;
+  }
+
+  .payment-amount-input {
+    padding: 10px;
+    font-size: 0.95em;
+  }
+
+  .payment-summary-row {
+    font-size: 0.95em;
+  }
+
+  .summary-value {
+    font-size: 1em;
+  }
+
+  .summary-value.highlight {
+    font-size: 1.1em;
+  }
+
+  .change-row.success .summary-value {
+    font-size: 1.15em;
   }
 
   /* 客製化彈窗 */
