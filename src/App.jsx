@@ -155,12 +155,19 @@ export default function App() {
       const remoteIDs = new Set(parsed.map(o => o.orderID).filter(Boolean))
       setLastRemoteIDs(remoteIDs)
 
-      // 只更新現有訂單，不添加新訂單（避免重新加入已結算的訂單）
+      // 合併遠端訂單：更新已存在的，新增不存在的；排除已結算（archives）
+      const archivedIDs = getArchivedIDs()
+      const incoming = parsed.filter(o => o.orderID && !archivedIDs.has(o.orderID))
+      if (incoming.length === 0) return remoteIDs
+
       setOrders((prev) => {
-        return prev.map(localOrder => {
-          const remoteOrder = parsed.find(x => x.orderID === localOrder.orderID)
-          return remoteOrder ? { ...localOrder, ...remoteOrder } : localOrder
+        const merged = [...prev]
+        incoming.forEach(o => {
+          const idx = merged.findIndex(x => x.orderID === o.orderID)
+          if (idx >= 0) merged[idx] = { ...merged[idx], ...o }
+          else merged.push(o)
         })
+        return merged
       })
       return remoteIDs
     } catch (e) {
@@ -198,12 +205,19 @@ export default function App() {
       }
     })
 
-    // 只更新現有訂單，不添加新訂單（避免重新加入已結算的訂單）
+    // 合併遠端訂單：更新已存在的，新增不存在的；排除已結算（archives）
+    const archivedIDs = getArchivedIDs()
+    const incoming = list.filter(o => o.orderID && !archivedIDs.has(o.orderID))
+    if (incoming.length === 0) return remoteIDs
+
     setOrders((prev) => {
-      return prev.map(localOrder => {
-        const remoteOrder = list.find(x => x.orderID === localOrder.orderID)
-        return remoteOrder ? { ...localOrder, ...remoteOrder } : localOrder
+      const merged = [...prev]
+      incoming.forEach(o => {
+        const idx = merged.findIndex(x => x.orderID === o.orderID)
+        if (idx >= 0) merged[idx] = { ...merged[idx], ...o }
+        else merged.push(o)
       })
+      return merged
     })
     return remoteIDs
   }
