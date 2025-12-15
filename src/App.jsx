@@ -297,7 +297,7 @@ export default function App() {
     // 定期同步：每 30 秒檢查一次（即使視窗未聚焦也會同步）
     const syncInterval = setInterval(() => {
       handleManualSync()
-    }, 30000) // 30 秒
+    }, 10000) // 10 秒
     
     return () => {
       window.removeEventListener('focus', onFocus)
