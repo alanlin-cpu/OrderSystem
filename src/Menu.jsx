@@ -6,11 +6,12 @@ export const menuItems = [
   { id: 3, name: 'Sandwich', price: 80 },
   { id: 4, name: 'Latte', price: 70 },
   { id: 5, name: 'Cake', price: 60 },
-  { id: 6, name: 'Juice', price: 55 }
+  { id: 6, name: 'Juice', price: 55 },
+  { id: 7, name: 'Bread', price: 25 }
 ]
 
 // 客製化選項配置，集中管理
-export const sweetnessOptions = ['無糖', '少糖', '半糖', '正常糖']
+export const sweetnessOptions = ['無糖', '少糖', '半糖', '三分糖', '正常糖']
 export const iceOptions = ['去冰', '少冰', '正常冰']
 
 export default function Menu({ menu = menuItems, onAddItem }) {

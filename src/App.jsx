@@ -5,6 +5,7 @@ import ToastContainer from './components/Toast'
 import './App.css'
 import OrderHistory from './OrderHistory'
 import Menu from './Menu.jsx'
+import { PromoSelector, PaymentSelector, promoOptions } from './components/CheckoutOptions'
 
 export default function App() {
   // moved to config.js
@@ -301,13 +302,6 @@ export default function App() {
     }
   }, [user])
 
-  const promoOptions = {
-    A: { type: 'percent', value: 10 }, // 10% off
-    B: { type: 'percent', value: 20 }, // 20% off
-    C: { type: 'fixed', value: 20 },   // minus $20
-    D: { type: 'fixed', value: 30 }    // minus $30
-  }
-
   const handleLogin = (e) => {
     e.preventDefault()
     const username = e.target.username.value.trim()
@@ -599,30 +593,20 @@ export default function App() {
           <div className="checkout-box">
             <div>小計: ${subtotal}</div>
 
-            <div className="form-row">
-              <label>折扣代碼</label>
-              <select value={promoCode} onChange={(e) => setPromoCode(e.target.value)}>
-                <option value="">-- 選擇 --</option>
-                {Object.keys(promoOptions).map(code => {
-                  const opt = promoOptions[code]
-                  const desc = opt.type === 'percent' ? `${opt.value}% off` : `減 $${opt.value}`
-                  return <option key={code} value={code}>{code} - {desc}</option>
-                })}
-              </select>
-              <button className="btn-apply" type="button" onClick={applyPromoCode}>套用</button>
-            </div>
-            {promoMessage && (
-              <div className={`message ${discount ? 'success' : 'error'}`}>{promoMessage}</div>
-            )}
+            <PromoSelector
+              selectedPromo={promoCode}
+              onPromoChange={({ code, discount, message }) => {
+                setPromoCode(code)
+                setDiscount(discount)
+                setPromoMessage(message)
+              }}
+              message={promoMessage}
+            />
 
-            <div className="form-row">
-              <label>付款方式</label>
-              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-                <option value="cash">現金</option>
-                <option value="card">信用卡</option>
-                <option value="linepay">Line Pay</option>
-              </select>
-            </div>
+            <PaymentSelector
+              selectedPayment={paymentMethod}
+              onPaymentChange={setPaymentMethod}
+            />
 
             <div className="total">總計: ${total}</div>
             <button className="btn-submit" onClick={submitOrder}>送出訂單</button>
