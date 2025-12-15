@@ -232,6 +232,26 @@ export default function App() {
         localIDs.forEach(id => { if (!remoteIDs.has(id)) nextFailed.add(id) })
         // console.log('sync result: local=%o, remote=%o, failed=%o', Array.from(localIDs), Array.from(remoteIDs), Array.from(nextFailed))
         setSyncFailedOrders(nextFailed)
+        
+        // 自動清理：本地有但遠端沒有 → 已在其他裝置結算，刪除
+        const archivedIDs = new Set(
+          archives.flatMap(a => a.orders.map(o => o.orderID || computeOrderID(o.timestamp)))
+        )
+        const toDelete = prev.filter(o => {
+          const id = o.orderID || computeOrderID(o.timestamp)
+          return nextFailed.has(id) && !archivedIDs.has(id)
+        })
+        
+        if (toDelete.length > 0) {
+          const remaining = prev.filter(o => {
+            const id = o.orderID || computeOrderID(o.timestamp)
+            return !nextFailed.has(id) || archivedIDs.has(id)
+          })
+          try {
+            localStorage.setItem('orders', JSON.stringify(remaining))
+          } catch {}
+          return remaining
+        }
         return prev
       })
     } catch (err) {
@@ -246,6 +266,26 @@ export default function App() {
           localIDs.forEach(id => { if (!remoteIDs.has(id)) nextFailed.add(id) })
           // console.log('sync result: local=%o, remote=%o, failed=%o', Array.from(localIDs), Array.from(remoteIDs), Array.from(nextFailed))
           setSyncFailedOrders(nextFailed)
+          
+          // 自動清理：本地有但遠端沒有 → 已在其他裝置結算，刪除
+          const archivedIDs = new Set(
+            archives.flatMap(a => a.orders.map(o => o.orderID || computeOrderID(o.timestamp)))
+          )
+          const toDelete = prev.filter(o => {
+            const id = o.orderID || computeOrderID(o.timestamp)
+            return nextFailed.has(id) && !archivedIDs.has(id)
+          })
+          
+          if (toDelete.length > 0) {
+            const remaining = prev.filter(o => {
+              const id = o.orderID || computeOrderID(o.timestamp)
+              return !nextFailed.has(id) || archivedIDs.has(id)
+            })
+            try {
+              localStorage.setItem('orders', JSON.stringify(remaining))
+            } catch {}
+            return remaining
+          }
           return prev
         })
       } catch (err2) {
