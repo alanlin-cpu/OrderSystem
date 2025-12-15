@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, startTransition } from 'react'
 import { GAS_URL, SHEET_ID, SHEET_NAME } from './config'
 import { computeOrderID, computeSettlementID } from './utils'
 import ToastContainer from './components/Toast'
@@ -15,6 +15,7 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState('menu') // 'menu' or 'history'
   const [lastRemoteIDs, setLastRemoteIDs] = useState(new Set()) // 最近一次遠端同步的 orderID 集合
   const [syncFailedOrders, setSyncFailedOrders] = useState(new Set()) // 同步失敗的訂單 orderID
+  const recentSubmissionsRef = useRef(new Map()) // 使用 ref 避免閉包問題
 
   const [discount, setDiscount] = useState(null)
   const [promoCode, setPromoCode] = useState('')
@@ -33,6 +34,24 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState(null)
   const [sweetness, setSweetness] = useState('正常糖')
   const [ice, setIce] = useState('正常冰')
+
+  // Helper: 取得已結算訂單的 ID 集合
+  const getArchivedIDs = () => new Set(
+    archives.flatMap(a => 
+      (Array.isArray(a.orders) ? a.orders : [])
+        .map(o => o.orderID || computeOrderID(o.timestamp))
+        .filter(Boolean)
+    )
+  )
+
+  // Helper: 更新 localStorage orders
+  const saveOrdersToLocal = (ordersList) => {
+    try {
+      localStorage.setItem('orders', JSON.stringify(ordersList))
+    } catch (e) {
+      console.warn('儲存本地訂單失敗', e)
+    }
+  }
 
   // computeOrderID now comes from utils.js
 
@@ -69,11 +88,14 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    try {
-      localStorage.setItem('orders', JSON.stringify(orders))
-    } catch (e) {
-      console.warn('儲存本地訂單失敗', e)
-    }
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem('orders', JSON.stringify(orders))
+      } catch (e) {
+        console.warn('儲存本地訂單失敗', e)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
   }, [orders])
 
   useEffect(() => {
@@ -133,32 +155,14 @@ export default function App() {
       const remoteIDs = new Set(parsed.map(o => o.orderID).filter(Boolean))
       setLastRemoteIDs(remoteIDs)
 
-      // 排除已結算（archives）中的訂單，避免重複顯示
-      const archivedIDs = new Set(
-        (archives || [])
-          .flatMap(a => Array.isArray(a.orders) ? a.orders : [])
-          .map(o => o.orderID)
-          .filter(Boolean)
-      )
-      const filtered = parsed.filter(o => o.orderID && !archivedIDs.has(o.orderID))
-      if (filtered.length === 0) return 0
-
-      let added = 0
+      // 只更新現有訂單，不添加新訂單（避免重新加入已結算的訂單）
       setOrders((prev) => {
-        const merged = [...prev]
-        filtered.forEach(o => {
-          const idx = merged.findIndex(x => x.orderID === o.orderID)
-          if (idx >= 0) {
-            // 保留較新欄位（例如 deleted 狀態）
-            merged[idx] = { ...merged[idx], ...o }
-          } else {
-            merged.push(o)
-            added += 1
-          }
+        return prev.map(localOrder => {
+          const remoteOrder = parsed.find(x => x.orderID === localOrder.orderID)
+          return remoteOrder ? { ...localOrder, ...remoteOrder } : localOrder
         })
-        return merged
       })
-      return remoteIDs  // 返回遠端 ID 集合供 handleManualSync 使用
+      return remoteIDs
     } catch (e) {
       console.warn('載入雲端訂單失敗（可能需要將試算表發佈為公開）', e)
       return new Set()
@@ -194,100 +198,68 @@ export default function App() {
       }
     })
 
-    const archivedIDs = new Set(
-      (archives || [])
-        .flatMap(a => Array.isArray(a.orders) ? a.orders : [])
-        .map(o => o.orderID)
-        .filter(Boolean)
-    )
-    const incoming = list.filter(o => o.orderID && !archivedIDs.has(o.orderID))
-    if (incoming.length === 0) return 0
-
-    let added = 0
+    // 只更新現有訂單，不添加新訂單（避免重新加入已結算的訂單）
     setOrders((prev) => {
-      const merged = [...prev]
-      incoming.forEach(o => {
-        const idx = merged.findIndex(x => x.orderID === o.orderID)
-        if (idx >= 0) {
-          merged[idx] = { ...merged[idx], ...o }
-        } else {
-          merged.push(o)
-          added += 1
-        }
+      return prev.map(localOrder => {
+        const remoteOrder = list.find(x => x.orderID === localOrder.orderID)
+        return remoteOrder ? { ...localOrder, ...remoteOrder } : localOrder
       })
-      return merged
     })
-    return remoteIDs  // 返回遠端 ID 集合供 handleManualSync 使用
+    return remoteIDs
   }
 
+
+  // 共用的同步邏輯：更新 syncFailedOrders 並清理已結算訂單
+  const processSyncResult = (remoteIDs, prevOrders) => {
+    const now = Date.now()
+    const recentSubmissions = recentSubmissionsRef.current
+    
+    // 清理過期的最近提交記錄（超過 2 分鐘）
+    for (const [id, timestamp] of recentSubmissions.entries()) {
+      if (now - timestamp > 120000) recentSubmissions.delete(id) // 2 分鐘 = 120000ms
+    }
+    
+    const localIDs = new Set(prevOrders.map(o => o.orderID).filter(Boolean))
+    const nextFailed = new Set()
+    
+    // 計算同步失敗的訂單，但排除最近 2 分鐘內提交的（給予上傳寬限期）
+    localIDs.forEach(id => { 
+      if (!remoteIDs.has(id) && !recentSubmissions.has(id)) {
+        nextFailed.add(id)
+      }
+    })
+    setSyncFailedOrders(nextFailed)
+    
+    // 自動清理：本地有但遠端沒有 → 已在其他裝置結算，刪除
+    if (nextFailed.size === 0) return prevOrders
+    
+    const archivedIDs = getArchivedIDs()
+    
+    const remaining = prevOrders.filter(o => {
+      const id = o.orderID || computeOrderID(o.timestamp)
+      // 保留條件：1) 遠端有 2) 本會話已結算 3) 最近 2 分鐘內提交（給予上傳寬限期）
+      if (!nextFailed.has(id)) return true
+      if (archivedIDs.has(id)) return true
+      if (recentSubmissions.has(id)) return true
+      return false
+    })
+    
+    if (remaining.length !== prevOrders.length) {
+      saveOrdersToLocal(remaining)
+      return remaining
+    }
+    return prevOrders
+  }
 
   const handleManualSync = async () => {
     try {
       const remoteIDs = await loadOrdersFromApi()
-      // console.log('handleManualSync API: remoteIDs=%o', Array.from(remoteIDs))
-      
-      setOrders(prev => {
-        const localIDs = new Set(prev.map(o => o.orderID).filter(Boolean))
-        const nextFailed = new Set()
-        localIDs.forEach(id => { if (!remoteIDs.has(id)) nextFailed.add(id) })
-        // console.log('sync result: local=%o, remote=%o, failed=%o', Array.from(localIDs), Array.from(remoteIDs), Array.from(nextFailed))
-        setSyncFailedOrders(nextFailed)
-        
-        // 自動清理：本地有但遠端沒有 → 已在其他裝置結算，刪除
-        const archivedIDs = new Set(
-          archives.flatMap(a => a.orders.map(o => o.orderID || computeOrderID(o.timestamp)))
-        )
-        const toDelete = prev.filter(o => {
-          const id = o.orderID || computeOrderID(o.timestamp)
-          return nextFailed.has(id) && !archivedIDs.has(id)
-        })
-        
-        if (toDelete.length > 0) {
-          const remaining = prev.filter(o => {
-            const id = o.orderID || computeOrderID(o.timestamp)
-            return !nextFailed.has(id) || archivedIDs.has(id)
-          })
-          try {
-            localStorage.setItem('orders', JSON.stringify(remaining))
-          } catch {}
-          return remaining
-        }
-        return prev
-      })
+      setOrders(prev => processSyncResult(remoteIDs, prev))
     } catch (err) {
       console.warn('doGet 同步失敗，嘗試 gviz fallback', err)
       try {
         const remoteIDs = await loadOrdersFromSheet()
-        // console.log('handleManualSync gviz: remoteIDs=%o', Array.from(remoteIDs))
-        
-        setOrders(prev => {
-          const localIDs = new Set(prev.map(o => o.orderID).filter(Boolean))
-          const nextFailed = new Set()
-          localIDs.forEach(id => { if (!remoteIDs.has(id)) nextFailed.add(id) })
-          // console.log('sync result: local=%o, remote=%o, failed=%o', Array.from(localIDs), Array.from(remoteIDs), Array.from(nextFailed))
-          setSyncFailedOrders(nextFailed)
-          
-          // 自動清理：本地有但遠端沒有 → 已在其他裝置結算，刪除
-          const archivedIDs = new Set(
-            archives.flatMap(a => a.orders.map(o => o.orderID || computeOrderID(o.timestamp)))
-          )
-          const toDelete = prev.filter(o => {
-            const id = o.orderID || computeOrderID(o.timestamp)
-            return nextFailed.has(id) && !archivedIDs.has(id)
-          })
-          
-          if (toDelete.length > 0) {
-            const remaining = prev.filter(o => {
-              const id = o.orderID || computeOrderID(o.timestamp)
-              return !nextFailed.has(id) || archivedIDs.has(id)
-            })
-            try {
-              localStorage.setItem('orders', JSON.stringify(remaining))
-            } catch {}
-            return remaining
-          }
-          return prev
-        })
+        setOrders(prev => processSyncResult(remoteIDs, prev))
       } catch (err2) {
         console.warn('同步失敗', err2)
       }
@@ -443,7 +415,16 @@ export default function App() {
 
     // 立即更新本地狀態（不等待網路回應）
     pushToast('已送出訂單！', 'success')
-    setOrders((prev) => [...prev, payload])
+    
+    // 記錄最近提交的訂單（給予 2 分鐘上傳寬限期）
+    recentSubmissionsRef.current.set(orderID, Date.now())
+    
+    // 批量更新狀態，使用 startTransition 降低更新優先級
+    startTransition(() => {
+      setOrders((prev) => [...prev, payload])
+    })
+    
+    // 立即清空購物車（高優先級，使用者立即感知）
     setCart([])
     setDiscount(null)
     setPromoCode('')
@@ -510,11 +491,9 @@ export default function App() {
     const sendSettlementToGas = async (settledOrders, note = '') => {
       const ts = new Date().toISOString()
       const batchId = computeSettlementID(ts)
-      console.log('Settlement orders:', settledOrders)
       const subtotalSum = settledOrders.reduce((s, o) => s + Number(o.subtotal || 0), 0)
       const discountSum = settledOrders.reduce((s, o) => s + Number(o.discountAmount || 0), 0)
       const totalSum = settledOrders.reduce((s, o) => s + Number(o.total || 0), 0)
-      console.log('Settlement sums:', { subtotalSum, discountSum, totalSum, count: settledOrders.length })
 
       const payload = {
         action: 'settlement',
@@ -565,13 +544,9 @@ export default function App() {
       // archive locally
       setArchives((prev) => [...prev, { id: Date.now(), timestamp: new Date().toISOString(), orders: settled }])
       // remove settled orders from active orders
-      setOrders((prev) => prev.filter((_, idx) => !indicesToSettle.includes(idx)))
-
-      // 同步更新 localStorage：orders 清空相對應項目
-      try {
-        const remaining = orders.filter((_, idx) => !indicesToSettle.includes(idx))
-        localStorage.setItem('orders', JSON.stringify(remaining))
-      } catch {}
+      const remaining = orders.filter((_, idx) => !indicesToSettle.includes(idx))
+      setOrders(remaining)
+      saveOrdersToLocal(remaining)
     }
 
     const handleSettleAllOrders = async () => {
@@ -583,7 +558,7 @@ export default function App() {
       // archive and clear locally
       setArchives((prev) => [...prev, { id: Date.now(), timestamp: new Date().toISOString(), orders: all }])
       setOrders([])
-      try { localStorage.setItem('orders', JSON.stringify([])) } catch {}
+      saveOrdersToLocal([])
     }
 
     return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} syncFailedOrders={syncFailedOrders} />
@@ -629,20 +604,7 @@ export default function App() {
             <div className="empty-cart">購物車為空</div>
           ) : (
             <ul className="cart-list">
-              {(() => {
-                const original = cart.map((entry, idx) => ({...entry, __idx: idx}))
-                const nameOrder = []
-                original.forEach(e => { const n = e.item?.name; if (n && !nameOrder.includes(n)) nameOrder.push(n) })
-                return original
-                  .sort((a,b) => {
-                    const an = a.item?.name || ''
-                    const bn = b.item?.name || ''
-                    const ai = nameOrder.indexOf(an)
-                    const bi = nameOrder.indexOf(bn)
-                    if (ai !== bi) return ai - bi
-                    return a.__idx - b.__idx
-                  })
-                  .map((entry, index) => (
+              {cart.map((entry, index) => (
                 <li key={index} className="cart-item">
                   <span>
                     {entry.item.name} x{entry.quantity} • ${entry.item.price}<br />
@@ -654,8 +616,7 @@ export default function App() {
                     <button className="quantity-btn quantity-btn-plus" onClick={() => updateQuantity(index, 1)}>+</button>
                   </div>
                 </li>
-                  ))
-              })()}
+              ))}
             </ul>
           )}
 

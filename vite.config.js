@@ -8,8 +8,7 @@ export default defineConfig({
     middlewareMode: false,
     hmr: {
       protocol: 'ws',
-      host: 'localhost',
-      port: 5173
+      host: 'localhost'
     }
   }
   // No TS forced entry; entry comes from index.html -> /src/main.jsx

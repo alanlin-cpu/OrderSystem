@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import ConfirmDialog from './components/ConfirmDialog'
 
 export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders, syncFailedOrders = new Set() }) {
@@ -9,28 +9,22 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
 
   const isDeleted = (o) => o.deleted || !!o.deletedAt
 
-  // 篩選訂單（只顯示未刪除的訂單搜尋結果，但表格顯示所有訂單）
-  const filtered = orders.filter(order => {
-    const userMatch = !searchUser || order.user.toLowerCase().includes(searchUser.toLowerCase())
-    const paymentMatch = !filterPayment || order.paymentMethod === filterPayment
-    return userMatch && paymentMatch
-  })
+  // 篩選訂單 - 使用 useMemo 快取
+  const filtered = useMemo(() => {
+    return orders.filter(order => {
+      const userMatch = !searchUser || order.user.toLowerCase().includes(searchUser.toLowerCase())
+      const paymentMatch = !filterPayment || order.paymentMethod === filterPayment
+      return userMatch && paymentMatch
+    })
+  }, [orders, searchUser, filterPayment])
 
   // 刪除訂單（軟刪除，標記為已刪除）
   const deleteOrder = (index) => {
     setConfirmDeleteIndex(index)
   }
 
-  // 統計：只計算未刪除的訂單
-  const activeOrders = filtered.filter(o => !isDeleted(o))
-
-  // helper: get active indices within original orders array matching current filters
-  const activeIndices = orders.reduce((acc, o, i) => {
-    const userMatch = !searchUser || o.user.toLowerCase().includes(searchUser.toLowerCase())
-    const paymentMatch = !filterPayment || o.paymentMethod === filterPayment
-    if (userMatch && paymentMatch && !isDeleted(o)) acc.push(i)
-    return acc
-  }, [])
+  // 統計：只計算未刪除的訂單 - 使用 useMemo 快取
+  const activeOrders = useMemo(() => filtered.filter(o => !isDeleted(o)), [filtered])
 
   return (
     <div className="order-history-container">
@@ -101,26 +95,13 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                     <details>
                       <summary>{order.items.length} 項</summary>
                       <ul className="item-details">
-                        {(() => {
-                          const original = order.items.map((it, idx) => ({...it, __idx: idx}))
-                          // 依首次出現的品項名稱順序分組（穩定分組，不做全域字母排序）
-                          const nameOrder = []
-                          original.forEach(it => { if (!nameOrder.includes(it.name)) nameOrder.push(it.name) })
-                          return original
-                            .sort((a,b) => {
-                              const ai = nameOrder.indexOf(a.name)
-                              const bi = nameOrder.indexOf(b.name)
-                              if (ai !== bi) return ai - bi
-                              return a.__idx - b.__idx
-                            })
-                            .map((item, i) => (
+                        {order.items.map((item, i) => (
                           <li key={i}>
                             {item.name} x{item.quantity} • ${item.price}
                             {item.sweetness && <span className="option"> • {item.sweetness}</span>}
                             {item.ice && <span className="option"> • {item.ice}</span>}
                           </li>
-                            ))
-                        })()}
+                        ))}
                       </ul>
                     </details>
                   </td>
@@ -205,7 +186,23 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                   <tbody>
                     {(() => {
                       const counts = {}
-                      filtered.forEach(o => o.items.forEach(it => { counts[it.name] = (counts[it.name]||0) + (it.quantity||1) }))
+                      const payTotals = {cash:0,card:0,linepay:0}
+                      let totalDiscount = 0
+                      let totalRevenue = 0
+                      
+                      // 一次遍歷計算所有統計
+                      filtered.forEach(o => {
+                        o.items.forEach(it => { 
+                          counts[it.name] = (counts[it.name]||0) + (it.quantity||1) 
+                        })
+                        payTotals[o.paymentMethod] = (payTotals[o.paymentMethod]||0) + Number(o.total||0)
+                        totalDiscount += Number(o.discountAmount||0)
+                        totalRevenue += Number(o.total||0)
+                      })
+                      
+                      // 儲存到 window 供其他區塊使用（避免重複計算）
+                      window._settlementCache = { counts, payTotals, totalDiscount, totalRevenue }
+                      
                       return Object.keys(counts).sort((a,b)=>String(a).localeCompare(String(b))).map((name) => (
                         <tr key={name}><td>{name}</td><td style={{textAlign:'right'}}>{counts[name]}</td></tr>
                       ))
@@ -217,8 +214,8 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                 <h4>銷量柱狀圖</h4>
                 <div className="bar-chart">
                   {(() => {
-                    const counts = {}
-                    filtered.forEach(o => o.items.forEach(it => { counts[it.name] = (counts[it.name]||0) + (it.quantity||1) }))
+                    const { counts } = window._settlementCache || {}
+                    if (!counts) return null
                     const entries = Object.entries(counts).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))
                     const max = entries.reduce((m,[,v]) => Math.max(m,v), 1)
                     return entries.map(([name, v]) => (
@@ -238,14 +235,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
               <table className="settle-summary" style={{width:'100%'}}>
                 <tbody>
                     {(() => {
-                      const payTotals = {cash:0,card:0,linepay:0}
-                      let totalDiscount = 0
-                      let totalRevenue = 0
-                      filtered.forEach(o => {
-                        payTotals[o.paymentMethod] = (payTotals[o.paymentMethod]||0) + Number(o.total||0)
-                        totalDiscount += Number(o.discountAmount||0)
-                        totalRevenue += Number(o.total||0)
-                      })
+                      const { payTotals, totalDiscount, totalRevenue } = window._settlementCache || { payTotals: {cash:0,card:0,linepay:0}, totalDiscount: 0, totalRevenue: 0 }
                       return (
                         <>
                           <tr><td>付款方式：現金</td><td style={{textAlign:'right'}}>${payTotals.cash}</td></tr>
