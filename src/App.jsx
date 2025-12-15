@@ -4,6 +4,7 @@ import { computeOrderID, computeSettlementID } from './utils'
 import ToastContainer from './components/Toast'
 import './App.css'
 import OrderHistory from './OrderHistory'
+import Menu from './Menu.jsx'
 
 export default function App() {
   // moved to config.js
@@ -29,11 +30,6 @@ export default function App() {
     setToasts(prev => [...prev, { id, type, message }])
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ttl)
   }
-
-  // 客製化彈出視窗狀態
-  const [selectedItem, setSelectedItem] = useState(null)
-  const [sweetness, setSweetness] = useState('正常糖')
-  const [ice, setIce] = useState('正常冰')
 
   // Helper: 取得已結算訂單的 ID 集合
   const getArchivedIDs = () => new Set(
@@ -312,15 +308,6 @@ export default function App() {
     D: { type: 'fixed', value: 30 }    // minus $30
   }
 
-  const menu = [
-    { id: 1, name: 'Coffee', price: 50 },
-    { id: 2, name: 'Tea', price: 40 },
-    { id: 3, name: 'Sandwich', price: 80 },
-    { id: 4, name: 'Latte', price: 70 },
-    { id: 5, name: 'Cake', price: 60 },
-    { id: 6, name: 'Juice', price: 55 }
-  ]
-
   const handleLogin = (e) => {
     e.preventDefault()
     const username = e.target.username.value.trim()
@@ -334,35 +321,24 @@ export default function App() {
     try { localStorage.removeItem('user') } catch {}
   }
 
-  // 開啟客製化視窗
-  const openCustomization = (item) => {
-    setSelectedItem(item)
-    setSweetness('正常糖')
-    setIce('正常冰')
-  }
-
   // 加入購物車（帶客製化選項）
-  const addToCartWithOptions = () => {
-    if (!selectedItem) return
-
+  const handleAddItem = ({ item, sweetness, ice }) => {
+    if (!item) return
     setCart((prev) => {
       const existing = prev.find(
-        entry => entry.item.id === selectedItem.id &&
+        entry => entry.item.id === item.id &&
                  entry.sweetness === sweetness &&
                  entry.ice === ice
       )
       if (existing) {
         return prev.map(entry =>
-          entry.item.id === selectedItem.id && entry.sweetness === sweetness && entry.ice === ice
+          entry.item.id === item.id && entry.sweetness === sweetness && entry.ice === ice
             ? { ...entry, quantity: entry.quantity + 1 }
             : entry
         )
       }
-      return [...prev, { item: selectedItem, quantity: 1, sweetness, ice }]
+      return [...prev, { item, quantity: 1, sweetness, ice }]
     })
-
-    // 關閉視窗
-    setSelectedItem(null)
   }
 
   const updateQuantity = (index, delta) => {
@@ -595,21 +571,7 @@ export default function App() {
 
       <div className="layout">
         {/* 左邊：格狀菜單 */}
-        <div className="column">
-          <h3 className="section-title">菜單</h3>
-          <div className="menu-grid">
-            {menu.map(item => (
-              <div
-                key={item.id}
-                className="menu-card"
-                onClick={() => openCustomization(item)}  // 整個卡片可點
-              >
-                <div className="menu-card-name">{item.name}</div>
-                <div className="menu-card-price">${item.price}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <Menu onAddItem={handleAddItem} />
 
         {/* 右邊：購物車 */}
         <div className="column">
@@ -668,49 +630,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* 客製化彈出視窗 */}
-      {selectedItem && (
-        <div className="modal-overlay" onClick={() => setSelectedItem(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">{selectedItem.name} - ${selectedItem.price}</div>
-
-            <div className="options-group">
-              <div className="options-title">甜度</div>
-              <div className="options-buttons">
-                {['無糖', '少糖', '半糖', '正常糖'].map(opt => (
-                  <button
-                    key={opt}
-                    className={`option-btn ${sweetness === opt ? 'selected' : ''}`}
-                    onClick={() => setSweetness(opt)}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="options-group">
-              <div className="options-title">冰塊</div>
-              <div className="options-buttons">
-                {['去冰', '少冰', '正常冰'].map(opt => (
-                  <button
-                    key={opt}
-                    className={`option-btn ${ice === opt ? 'selected' : ''}`}
-                    onClick={() => setIce(opt)}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="modal-buttons">
-              <button className="modal-btn-cancel" onClick={() => setSelectedItem(null)}>取消</button>
-              <button className="modal-btn-add" onClick={addToCartWithOptions}>加入購物車</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
