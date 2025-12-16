@@ -1,6 +1,7 @@
 const SPREADSHEET_ID = '1m2TkzWJb1U-jTm6JKDAnmM-WsHY1NbMlxQwVa_q-jx8';
 const ORDERS_SHEET = 'orders';
 const LOGS_SHEET = 'Logs';
+const USERS_SHEET = 'Users';
 
 /**
  * 將 items 轉為人類可讀的排序字串：
@@ -177,6 +178,53 @@ function doOptions(e) {
 function doGet(e) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    
+    // 處理登入驗證請求
+    const action = (e && e.parameter && e.parameter.action) || '';
+    if (action === 'login') {
+      const username = String(e.parameter.username || '').trim();
+      const password = String(e.parameter.password || '').trim();
+      
+      if (!username || !password) {
+        return ContentService
+          .createTextOutput(JSON.stringify({ success: false, message: '請輸入帳號和密碼' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      // 確保 Users 工作表存在並有表頭
+      let usersSheet = ss.getSheetByName(USERS_SHEET);
+      if (!usersSheet) {
+        usersSheet = ss.insertSheet(USERS_SHEET);
+        usersSheet.appendRow(['帳號', '密碼', '姓名', '建立時間']);
+        // 新增預設管理員帳號
+        usersSheet.appendRow(['admin', 'admin123', '管理員', new Date()]);
+      }
+      
+      // 檢查帳號密碼是否匹配
+      const values = usersSheet.getDataRange().getValues();
+      for (let i = 1; i < values.length; i++) {
+        const row = values[i];
+        const storedUsername = String(row[0] || '').trim();
+        const storedPassword = String(row[1] || '').trim();
+        const displayName = String(row[2] || '').trim();
+        
+        if (storedUsername === username && storedPassword === password) {
+          return ContentService
+            .createTextOutput(JSON.stringify({ 
+              success: true, 
+              username: username,
+              displayName: displayName || username
+            }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+      
+      // 帳號或密碼錯誤
+      return ContentService
+        .createTextOutput(JSON.stringify({ success: false, message: '帳號或密碼錯誤' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
     const sheet = ss.getSheetByName(ORDERS_SHEET);
     if (!sheet) {
       return ContentService

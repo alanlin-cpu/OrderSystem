@@ -508,6 +508,7 @@
   border: 1px solid #ccc;
   border-radius: 8px;
   font-size: 1.1em;
+  box-sizing: border-box;
 }
 
 .login-container button {

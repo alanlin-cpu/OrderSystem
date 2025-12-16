@@ -1,13 +1,18 @@
 import React, { useState } from 'react'
 
 export const menuItems = [
-  { id: 1, name: 'Coffee', price: 50, category: 'coffee' },
-  { id: 2, name: 'Tea', price: 40, category: 'tea' },
-  { id: 3, name: 'Sandwich', price: 80, category: 'food' },
-  { id: 4, name: 'Latte', price: 70, category: 'coffee' },
-  { id: 5, name: 'Cake', price: 60, category: 'food' },
-  { id: 6, name: 'Juice', price: 55, category: 'juice' },
-  { id: 7, name: 'Bread', price: 25, category: 'food' }
+  { id: 1, name: 'Mini', price: 25, category: 'film' },
+  { id: 2, name: 'Wide', price: 35, category: 'film' },
+  { id: 3, name: 'Polaroid GO', price: 35, category: 'film' },
+  { id: 4, name: 'Polaroid 白', price: 45, category: 'film' },
+  { id: 5, name: 'Polaroid 黑', price: 55, category: 'film' },
+  { id: 6, name: 'Polaroid 金', price: 60, category: 'film' },
+  { id: 7, name: 'Polaroid 特別', price: 65, category: 'film' },
+  { id: 8, name: '斯拉片 黑白', price: 188, category: 'film' },
+  { id: 9, name: '斯拉片 彩色白', price: 488, category: 'film' },
+  { id: 10, name: '自拍館Set', price: 129, category: '自拍館' },
+  { id: 11, name: '加印', price: 20, category: '自拍館' },
+  { id: 12, name: '自拍館單張', price: 69, category: '自拍館' }
 ]
 
 // 需要顯示甜度和冰塊選項的飲料類別

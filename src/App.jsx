@@ -293,12 +293,35 @@ export default function App() {
     }
   }, [user])
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault()
     const username = e.target.username.value.trim()
     const password = e.target.password.value.trim()
-    if (username && password) setUser(username)
-    else alert('請輸入帳號和密碼')
+    
+    if (!username || !password) {
+      pushToast('請輸入帳號和密碼', 'error')
+      return
+    }
+
+    // 顯示登入中提示
+    pushToast('登入中...', 'info', 2000)
+
+    try {
+      // 呼叫 GAS API 驗證帳號密碼
+      const url = `${GAS_URL}?action=login&username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+      const response = await fetch(url)
+      const data = await response.json()
+      
+      if (data.success) {
+        setUser(data.username)
+        pushToast(`歡迎 ${data.displayName || username}！`, 'success')
+      } else {
+        pushToast(data.message || '登入失敗', 'error', 4000)
+      }
+    } catch (error) {
+      console.error('登入驗證失敗:', error)
+      pushToast('無法連接到伺服器，請檢查網路連線', 'error', 4000)
+    }
   }
 
   const handleLogout = () => {
@@ -437,14 +460,17 @@ export default function App() {
   }
 
   if (!user) return (
-    <div className="login-container">
-      <h2>員工登入</h2>
-      <form onSubmit={handleLogin}>
-        <input name="username" placeholder="帳號" required />
-        <input name="password" type="password" placeholder="密碼" required />
-        <button type="submit">登入</button>
-      </form>
-    </div>
+    <>
+      <div className="login-container">
+        <h2>員工登入</h2>
+        <form onSubmit={handleLogin}>
+          <input name="username" placeholder="帳號" required />
+          <input name="password" type="password" placeholder="密碼" required />
+          <button type="submit">登入</button>
+        </form>
+      </div>
+      <ToastContainer toasts={toasts} />
+    </>
   )
 
   // 訂單記錄頁面
