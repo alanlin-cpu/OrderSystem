@@ -1,40 +1,47 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
+import ConfirmDialog from './components/ConfirmDialog'
 
-export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders }) {
+export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders, syncFailedOrders = new Set() }) {
   const [searchUser, setSearchUser] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
   const [settleOpen, setSettleOpen] = useState(false)
+  const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null)
 
-  // 篩選訂單（只顯示未刪除的訂單搜尋結果，但表格顯示所有訂單）
-  const filtered = orders.filter(order => {
-    const userMatch = !searchUser || order.user.toLowerCase().includes(searchUser.toLowerCase())
-    const paymentMatch = !filterPayment || order.paymentMethod === filterPayment
-    return userMatch && paymentMatch
-  })
+  const isDeleted = (o) => o.deleted || !!o.deletedAt
+
+  // 篩選訂單 - 使用 useMemo 快取
+  const paymentMap = { cash: '現金', card: '信用卡', linepay: 'Line Pay' }
+
+  const filtered = useMemo(() => {
+    return orders.filter(order => {
+      const userMatch = !searchUser || order.user.toLowerCase().includes(searchUser.toLowerCase())
+      if (!filterPayment) return userMatch
+
+      // 新格式：paymentAmounts 可能存在多個付款方式
+      if (order.paymentAmounts && typeof order.paymentAmounts === 'object') {
+        return Object.keys(order.paymentAmounts).includes(filterPayment) && userMatch
+      }
+
+      // 舊格式：單一 paymentMethod 字串
+      return userMatch && order.paymentMethod === filterPayment
+    })
+  }, [orders, searchUser, filterPayment])
 
   // 刪除訂單（軟刪除，標記為已刪除）
   const deleteOrder = (index) => {
-    if (confirm('確定要刪除此訂單？此訂單記錄將保留但顯示為已刪除')) {
-      onDeleteOrder(index)
-    }
+    setConfirmDeleteIndex(index)
   }
 
-  // 統計：只計算未刪除的訂單
-  const activeOrders = filtered.filter(o => !o.deleted)
-
-  // helper: get active indices within original orders array matching current filters
-  const activeIndices = orders.reduce((acc, o, i) => {
-    const userMatch = !searchUser || o.user.toLowerCase().includes(searchUser.toLowerCase())
-    const paymentMatch = !filterPayment || o.paymentMethod === filterPayment
-    if (userMatch && paymentMatch && !o.deleted) acc.push(i)
-    return acc
-  }, [])
+  // 統計：只計算未刪除的訂單 - 使用 useMemo 快取
+  const activeOrders = useMemo(() => filtered.filter(o => !isDeleted(o)), [filtered])
 
   return (
     <div className="order-history-container">
       <div className="order-history-header">
         <h2>訂單記錄</h2>
-        <button className="btn-back" onClick={onBack}>← 返回</button>
+        <div style={{display:'flex', gap:8}}>
+          <button className="btn-back" onClick={onBack}>← 返回</button>
+        </div>
       </div>
 
       {/* 搜尋與篩選 */}
@@ -71,27 +78,35 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
             <thead>
               <tr>
                 <th>時間</th>
+                <th>編號</th>
                 <th>員工</th>
                 <th>品項</th>
                 <th>小計</th>
                 <th>折扣</th>
                 <th>總計</th>
                 <th>付款</th>
+                <th>刪除者及時間</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((order, idx) => (
-                <tr key={idx} className={`order-row ${order.deleted ? 'deleted' : ''}`}>
+                <tr key={idx} className={`order-row ${isDeleted(order) ? 'deleted' : ''}`}>
                   <td className="time">{new Date(order.timestamp).toLocaleString('zh-TW')}</td>
-                  <td className="user">{order.user} {order.deleted && <span className="deleted-badge">【已刪除】</span>}</td>
+                  <td className="order-id">
+                    {order.orderID || '—'}
+                    {syncFailedOrders.has(order.orderID) && (
+                      <span title="本機保留，雲端同步失敗" style={{marginLeft: '6px', fontSize: '16px'}}>⚠️</span>
+                    )}
+                  </td>
+                  <td className="user">{order.user}</td>
                   <td className="items">
                     <details>
                       <summary>{order.items.length} 項</summary>
                       <ul className="item-details">
                         {order.items.map((item, i) => (
                           <li key={i}>
-                            {item.name} × {item.quantity} (${item.price * item.quantity})
+                            {item.name} x{item.quantity} • ${item.price}
                             {item.sweetness && <span className="option"> • {item.sweetness}</span>}
                             {item.ice && <span className="option"> • {item.ice}</span>}
                           </li>
@@ -111,9 +126,29 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                     )}
                   </td>
                   <td className="total">${order.total}</td>
-                  <td className="payment">{order.paymentMethod === 'cash' ? '現金' : order.paymentMethod === 'card' ? '信用卡' : 'Line Pay'}</td>
+                  <td className="payment">
+                    {order.paymentAmounts && Object.keys(order.paymentAmounts).length > 0 ? (
+                      <div style={{display:'flex', flexDirection:'column', gap:4}}>
+                        {Object.entries(order.paymentAmounts).map(([method, amount]) => (
+                          <span key={method}>{paymentMap[method] || method}: ${amount}</span>
+                        ))}
+                        <small style={{color:'#555'}}>實收：${Object.values(order.paymentAmounts).reduce((s,a)=>s+Number(a||0),0)}</small>
+                      </div>
+                    ) : (
+                      paymentMap[order.paymentMethod] || order.paymentMethod || '-'
+                    )}
+                  </td>
+                  <td className="deleted-info">
+                    {isDeleted(order) || order.deletedBy ? (
+                      <div className="deleted-badge">
+                        <div>【已刪除】</div>
+                        {order.deletedBy && <div><small>刪除者: {order.deletedBy}</small></div>}
+                        {order.deletedAt && <div><small>{new Date(order.deletedAt).toLocaleString('zh-TW')}</small></div>}
+                      </div>
+                    ) : '—'}
+                  </td>
                   <td className="actions">
-                    {!order.deleted && (
+                    {!isDeleted(order) && (
                       <button className="btn-delete" onClick={() => deleteOrder(idx)}>🗑 刪除</button>
                     )}
                   </td>
@@ -123,6 +158,14 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
           </table>
         </div>
       )}
+
+      {/* 自訂刪除確認對話框 */}
+      <ConfirmDialog
+        open={confirmDeleteIndex !== null}
+        title="確定要刪除此訂單嗎？此訂單記錄將保留但顯示為已刪除。"
+        onCancel={() => setConfirmDeleteIndex(null)}
+        onConfirm={() => { onDeleteOrder(confirmDeleteIndex); setConfirmDeleteIndex(null) }}
+      />
 
       {/* 統計 */}
       {activeOrders.length > 0 && (
@@ -163,8 +206,30 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                   <tbody>
                     {(() => {
                       const counts = {}
-                      activeOrders.forEach(o => o.items.forEach(it => { counts[it.name] = (counts[it.name]||0) + (it.quantity||1) }))
-                      return Object.keys(counts).map((name) => (
+                      const payTotals = {cash:0,card:0,linepay:0}
+                      let totalDiscount = 0
+                      let totalRevenue = 0
+                      
+                      // 一次遍歷計算所有統計
+                      filtered.forEach(o => {
+                        o.items.forEach(it => { 
+                          counts[it.name] = (counts[it.name]||0) + (it.quantity||1) 
+                        })
+                        if (o.paymentAmounts && typeof o.paymentAmounts === 'object') {
+                          Object.entries(o.paymentAmounts).forEach(([method, amt]) => {
+                            payTotals[method] = (payTotals[method]||0) + Number(amt||0)
+                          })
+                        } else {
+                          payTotals[o.paymentMethod] = (payTotals[o.paymentMethod]||0) + Number(o.total||0)
+                        }
+                        totalDiscount += Number(o.discountAmount||0)
+                        totalRevenue += Number(o.total||0)
+                      })
+                      
+                      // 儲存到 window 供其他區塊使用（避免重複計算）
+                      window._settlementCache = { counts, payTotals, totalDiscount, totalRevenue }
+                      
+                      return Object.keys(counts).sort((a,b)=>String(a).localeCompare(String(b))).map((name) => (
                         <tr key={name}><td>{name}</td><td style={{textAlign:'right'}}>{counts[name]}</td></tr>
                       ))
                     })()}
@@ -175,9 +240,9 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                 <h4>銷量柱狀圖</h4>
                 <div className="bar-chart">
                   {(() => {
-                    const counts = {}
-                    activeOrders.forEach(o => o.items.forEach(it => { counts[it.name] = (counts[it.name]||0) + (it.quantity||1) }))
-                    const entries = Object.entries(counts)
+                    const { counts } = window._settlementCache || {}
+                    if (!counts) return null
+                    const entries = Object.entries(counts).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))
                     const max = entries.reduce((m,[,v]) => Math.max(m,v), 1)
                     return entries.map(([name, v]) => (
                       <div className="bar-row" key={name}>
@@ -196,14 +261,7 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
               <table className="settle-summary" style={{width:'100%'}}>
                 <tbody>
                     {(() => {
-                      const payTotals = {cash:0,card:0,linepay:0}
-                      let totalDiscount = 0
-                      let totalRevenue = 0
-                      activeOrders.forEach(o => {
-                        payTotals[o.paymentMethod] = (payTotals[o.paymentMethod]||0) + Number(o.total||0)
-                        totalDiscount += Number(o.discountAmount||0)
-                        totalRevenue += Number(o.total||0)
-                      })
+                      const { payTotals, totalDiscount, totalRevenue } = window._settlementCache || { payTotals: {cash:0,card:0,linepay:0}, totalDiscount: 0, totalRevenue: 0 }
                       return (
                         <>
                           <tr><td>付款方式：現金</td><td style={{textAlign:'right'}}>${payTotals.cash}</td></tr>

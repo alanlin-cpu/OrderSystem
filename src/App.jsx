@@ -1,26 +1,56 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, startTransition } from 'react'
+import { GAS_URL, SHEET_ID, SHEET_NAME } from './config'
+import { computeOrderID, computeSettlementID } from './utils'
+import ToastContainer from './components/Toast'
 import './App.css'
 import OrderHistory from './OrderHistory'
+import Menu from './Menu.jsx'
+import { PromoSelector, PaymentSelector, promoOptions } from './components/CheckoutOptions'
 
 export default function App() {
-  const SHEET_ID = '1m2TkzWJb1U-jTm6JKDAnmM-WsHY1NbMlxQwVa_q-jx8'
-  const SHEET_NAME = 'Orders'
+  // moved to config.js
 
   const [user, setUser] = useState(null)
   const [cart, setCart] = useState([])  // { item, quantity, sweetness, ice }
   const [orders, setOrders] = useState([])
   const [archives, setArchives] = useState([]) // settlement archives
   const [currentPage, setCurrentPage] = useState('menu') // 'menu' or 'history'
+  const [lastRemoteIDs, setLastRemoteIDs] = useState(new Set()) // 最近一次遠端同步的 orderID 集合
+  const [syncFailedOrders, setSyncFailedOrders] = useState(new Set()) // 同步失敗的訂單 orderID
+  const recentSubmissionsRef = useRef(new Map()) // 使用 ref 避免閉包問題
 
   const [discount, setDiscount] = useState(null)
   const [promoCode, setPromoCode] = useState('')
   const [promoMessage, setPromoMessage] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [paymentAmounts, setPaymentAmounts] = useState({}) // 付款方式與金額對映 { cash: 100, card: 50 }
 
-  // 客製化彈出視窗狀態
-  const [selectedItem, setSelectedItem] = useState(null)
-  const [sweetness, setSweetness] = useState('正常糖')
-  const [ice, setIce] = useState('正常冰')
+  // Toast state
+  const [toasts, setToasts] = useState([]) // { id, type: 'success'|'error'|'info', message }
+  const pushToast = (message, type = 'success', ttl = 3000) => {
+    const id = Date.now() + Math.random()
+    setToasts(prev => [...prev, { id, type, message }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), ttl)
+  }
+
+  // Helper: 取得已結算訂單的 ID 集合
+  const getArchivedIDs = () => new Set(
+    archives.flatMap(a => 
+      (Array.isArray(a.orders) ? a.orders : [])
+        .map(o => o.orderID || computeOrderID(o.timestamp))
+        .filter(Boolean)
+    )
+  )
+
+  // Helper: 更新 localStorage orders
+  const saveOrdersToLocal = (ordersList) => {
+    try {
+      localStorage.setItem('orders', JSON.stringify(ordersList))
+    } catch (e) {
+      console.warn('儲存本地訂單失敗', e)
+    }
+  }
+
+  // computeOrderID now comes from utils.js
 
   // 持久化：載入 orders/archives；變更時儲存到 localStorage
   useEffect(() => {
@@ -28,16 +58,22 @@ export default function App() {
       const savedUser = localStorage.getItem('user')
       if (savedUser) setUser(savedUser)
 
-      const savedPayment = localStorage.getItem('paymentMethod')
-      if (savedPayment) setPaymentMethod(savedPayment)
-
-      const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]')
+      const savedOrdersRaw = JSON.parse(localStorage.getItem('orders') || '[]')
+      const savedOrders = Array.isArray(savedOrdersRaw)
+        ? savedOrdersRaw.map(o => ({ ...o, orderID: o.orderID || computeOrderID(o.timestamp) }))
+        : []
       const savedArchives = JSON.parse(localStorage.getItem('archives') || '[]')
       if (Array.isArray(savedOrders) && savedOrders.length > 0) {
         setOrders(savedOrders)
       } else {
-        // 若本地沒有訂單，嘗試從 Google Sheet 載入
-        loadOrdersFromSheet()
+        // 若本地沒有訂單，優先嘗試從 Apps Script API (doGet) 載入，失敗則退回 gviz
+        (async () => {
+          try {
+            await loadOrdersFromApi()
+          } catch (_) {
+            loadOrdersFromSheet()
+          }
+        })()
       }
       if (Array.isArray(savedArchives)) setArchives(savedArchives)
     } catch (e) {
@@ -46,11 +82,14 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    try {
-      localStorage.setItem('orders', JSON.stringify(orders))
-    } catch (e) {
-      console.warn('儲存本地訂單失敗', e)
-    }
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem('orders', JSON.stringify(orders))
+      } catch (e) {
+        console.warn('儲存本地訂單失敗', e)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
   }, [orders])
 
   useEffect(() => {
@@ -69,13 +108,7 @@ export default function App() {
     }
   }, [user])
 
-  useEffect(() => {
-    try {
-      if (paymentMethod) localStorage.setItem('paymentMethod', paymentMethod)
-    } catch (e) {
-      console.warn('儲存付款方式失敗', e)
-    }
-  }, [paymentMethod])
+
 
   async function loadOrdersFromSheet() {
     try {
@@ -87,40 +120,178 @@ export default function App() {
       if (start === -1 || end === -1) throw new Error('Unexpected response from gviz')
       const data = JSON.parse(text.slice(start, end + 1))
       const rows = data?.table?.rows || []
-      const parsed = rows.map(r => {
+      // Skip first row (header) and parse remaining rows
+      const parsed = rows.slice(1).map(r => {
         const c = r.c || []
-        const ts = c[0]?.v || new Date().toISOString()
-        const uname = c[1]?.v || ''
+        const ts = c[0]?.v || new Date().toISOString()  // 時間
+        const orderID = c[1]?.v || computeOrderID(ts)    // 訂單編號
+        const uname = c[2]?.v || ''
         let items = []
-        try { items = JSON.parse(c[2]?.v || '[]') } catch (_) {}
-        const subtotal = Number(c[3]?.v || 0)
-        const discountAmount = Number(c[4]?.v || 0)
-        const total = Number(c[5]?.v || 0)
-        const payment = c[6]?.v || 'cash'
-        const promo = c[7]?.v || ''
-        return { user: uname, items, subtotal, discountAmount, total, paymentMethod: payment, promoCode: promo, timestamp: ts }
+        try { items = JSON.parse(c[3]?.v || '[]') } catch (_) {}
+        const subtotal = Number(c[4]?.v || 0)
+        const discountAmount = Number(c[5]?.v || 0)
+        const total = Number(c[6]?.v || 0)
+        const payment = c[7]?.v || 'cash'
+        const promo = c[8]?.v || ''
+        const deletedBy = c[9]?.v || ''
+        const deletedAt = c[10]?.v || ''
+        return { user: uname, items, subtotal, discountAmount, total, paymentMethod: payment, promoCode: promo, timestamp: ts, deletedBy, deletedAt, orderID }
+      }).filter(o => o.orderID && String(o.orderID).length > 5) // Filter out invalid rows
+      if (parsed.length === 0) return 0
+
+      // 記錄此次遠端集合（不含已結算過濾），供後續 reconcile 使用
+      const remoteIDs = new Set(parsed.map(o => o.orderID).filter(Boolean))
+      setLastRemoteIDs(remoteIDs)
+
+      // 合併遠端訂單：更新已存在的，新增不存在的；排除已結算（archives）
+      const archivedIDs = getArchivedIDs()
+      const incoming = parsed.filter(o => o.orderID && !archivedIDs.has(o.orderID))
+      if (incoming.length === 0) return remoteIDs
+
+      setOrders((prev) => {
+        const merged = [...prev]
+        incoming.forEach(o => {
+          const idx = merged.findIndex(x => x.orderID === o.orderID)
+          if (idx >= 0) merged[idx] = { ...merged[idx], ...o }
+          else merged.push(o)
+        })
+        return merged
       })
-      if (parsed.length > 0) setOrders(parsed)
+      return remoteIDs
     } catch (e) {
       console.warn('載入雲端訂單失敗（可能需要將試算表發佈為公開）', e)
+      return new Set()
     }
   }
 
-  const promoOptions = {
-    A: { type: 'percent', value: 10 }, // 10% off
-    B: { type: 'percent', value: 20 }, // 20% off
-    C: { type: 'fixed', value: 20 },   // minus $20
-    D: { type: 'fixed', value: 30 }    // minus $30
+  async function loadOrdersFromApi() {
+    // 期望 GAS doGet 回傳 JSON: { orders: [ { orderID, timestamp, user, items, subtotal, discountAmount, total, paymentMethod, promoCode, deletedBy, deletedAt } ] }
+    const url = `${GAS_URL}?action=get`
+    const res = await fetch(url, { method: 'GET' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    const list = Array.isArray(data?.orders) ? data.orders : []
+    if (list.length === 0) return new Set() // 返回空集合
+
+    // 記錄此次遠端集合（原始回傳），並直接返回以供 handleManualSync 使用
+    const remoteIDs = new Set(list.map(o => o.orderID).filter(Boolean))
+    setLastRemoteIDs(remoteIDs)
+    
+    // console 診斷：看看有多少筆有有效 orderID
+    // console.log('loadOrdersFromApi: raw count=%d, valid orderIDs=%d', list.length, remoteIDs.size)
+
+    // Fallback: 若 items 為空但有 itemsStr，嘗試解析字符串（多層 fallback 應對舊資料轉換期）
+    list.forEach(o => {
+      if ((!o.items || o.items.length === 0) && o.itemsStr) {
+        try {
+          // 嘗試 JSON.parse（第 4 欄若儲存的是 JSON）
+          o.items = JSON.parse(o.itemsStr)
+        } catch (_) {
+          // itemsStr 不是 JSON 格式，保留空陣列
+          o.items = []
+        }
+      }
+    })
+
+    // 合併遠端訂單：更新已存在的，新增不存在的；排除已結算（archives）
+    const archivedIDs = getArchivedIDs()
+    const incoming = list.filter(o => o.orderID && !archivedIDs.has(o.orderID))
+    if (incoming.length === 0) return remoteIDs
+
+    setOrders((prev) => {
+      const merged = [...prev]
+      incoming.forEach(o => {
+        const idx = merged.findIndex(x => x.orderID === o.orderID)
+        if (idx >= 0) merged[idx] = { ...merged[idx], ...o }
+        else merged.push(o)
+      })
+      return merged
+    })
+    return remoteIDs
   }
 
-  const menu = [
-    { id: 1, name: 'Coffee', price: 50 },
-    { id: 2, name: 'Tea', price: 40 },
-    { id: 3, name: 'Sandwich', price: 80 },
-    { id: 4, name: 'Latte', price: 70 },
-    { id: 5, name: 'Cake', price: 60 },
-    { id: 6, name: 'Juice', price: 55 }
-  ]
+
+  // 共用的同步邏輯：更新 syncFailedOrders 並清理已結算訂單
+  const processSyncResult = (remoteIDs, prevOrders) => {
+    const now = Date.now()
+    const recentSubmissions = recentSubmissionsRef.current
+    
+    // 清理過期的最近提交記錄（超過 2 分鐘）
+    for (const [id, timestamp] of recentSubmissions.entries()) {
+      if (now - timestamp > 120000) recentSubmissions.delete(id) // 2 分鐘 = 120000ms
+    }
+    
+    const localIDs = new Set(prevOrders.map(o => o.orderID).filter(Boolean))
+    const nextFailed = new Set()
+    
+    // 計算同步失敗的訂單，但排除最近 2 分鐘內提交的（給予上傳寬限期）
+    localIDs.forEach(id => { 
+      if (!remoteIDs.has(id) && !recentSubmissions.has(id)) {
+        nextFailed.add(id)
+      }
+    })
+    setSyncFailedOrders(nextFailed)
+    
+    // 自動清理：本地有但遠端沒有 → 已在其他裝置結算，刪除
+    if (nextFailed.size === 0) return prevOrders
+    
+    const archivedIDs = getArchivedIDs()
+    
+    const remaining = prevOrders.filter(o => {
+      const id = o.orderID || computeOrderID(o.timestamp)
+      // 保留條件：1) 遠端有 2) 本會話已結算 3) 最近 2 分鐘內提交（給予上傳寬限期）
+      if (!nextFailed.has(id)) return true
+      if (archivedIDs.has(id)) return true
+      if (recentSubmissions.has(id)) return true
+      return false
+    })
+    
+    if (remaining.length !== prevOrders.length) {
+      saveOrdersToLocal(remaining)
+      return remaining
+    }
+    return prevOrders
+  }
+
+  const handleManualSync = async () => {
+    try {
+      const remoteIDs = await loadOrdersFromApi()
+      setOrders(prev => processSyncResult(remoteIDs, prev))
+    } catch (err) {
+      console.warn('doGet 同步失敗，嘗試 gviz fallback', err)
+      try {
+        const remoteIDs = await loadOrdersFromSheet()
+        setOrders(prev => processSyncResult(remoteIDs, prev))
+      } catch (err2) {
+        console.warn('同步失敗', err2)
+      }
+    }
+  }
+
+  // 首次載入（登入後）立即同步一次
+  useEffect(() => {
+    if (!user) return
+    handleManualSync()
+  }, [user])
+
+  // 自動同步：視窗聚焦時同步 + 定期同步每 30 秒（需登入後啟用）
+  useEffect(() => {
+    if (!user) return
+    
+    // 視窗聚焦時同步
+    const onFocus = () => { handleManualSync() }
+    window.addEventListener('focus', onFocus)
+    
+    // 定期同步：每 30 秒檢查一次（即使視窗未聚焦也會同步）
+    const syncInterval = setInterval(() => {
+      handleManualSync()
+    }, 10000) // 10 秒
+    
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      clearInterval(syncInterval)
+    }
+  }, [user])
 
   const handleLogin = (e) => {
     e.preventDefault()
@@ -135,35 +306,24 @@ export default function App() {
     try { localStorage.removeItem('user') } catch {}
   }
 
-  // 開啟客製化視窗
-  const openCustomization = (item) => {
-    setSelectedItem(item)
-    setSweetness('正常糖')
-    setIce('正常冰')
-  }
-
   // 加入購物車（帶客製化選項）
-  const addToCartWithOptions = () => {
-    if (!selectedItem) return
-
+  const handleAddItem = ({ item, sweetness, ice }) => {
+    if (!item) return
     setCart((prev) => {
       const existing = prev.find(
-        entry => entry.item.id === selectedItem.id &&
+        entry => entry.item.id === item.id &&
                  entry.sweetness === sweetness &&
                  entry.ice === ice
       )
       if (existing) {
         return prev.map(entry =>
-          entry.item.id === selectedItem.id && entry.sweetness === sweetness && entry.ice === ice
+          entry.item.id === item.id && entry.sweetness === sweetness && entry.ice === ice
             ? { ...entry, quantity: entry.quantity + 1 }
             : entry
         )
       }
-      return [...prev, { item: selectedItem, quantity: 1, sweetness, ice }]
+      return [...prev, { item, quantity: 1, sweetness, ice }]
     })
-
-    // 關閉視窗
-    setSelectedItem(null)
   }
 
   const updateQuantity = (index, delta) => {
@@ -203,6 +363,13 @@ export default function App() {
   const submitOrder = async () => {
     if (cart.length === 0) { alert('購物車為空'); return }
 
+    // 驗證實收金額
+    const totalReceived = Object.values(paymentAmounts).reduce((sum, amt) => sum + Number(amt || 0), 0)
+    if (totalReceived < total) {
+      pushToast(`實收金額不足！應收 $${total}，實收 $${totalReceived}，差額 $${total - totalReceived}`, 'error', 5000)
+      return
+    }
+
     const itemsForPayload = cart.map(entry => ({
       ...entry.item,
       quantity: entry.quantity,
@@ -210,28 +377,54 @@ export default function App() {
       ice: entry.ice
     }))
 
+    // 生成訂單編號：精確到毫秒 (YYYYMMDDHHMMSSmmm)
+    const now = new Date()
+    const orderID = computeOrderID(now)
+
+    const changeAmount = totalReceived > 0 ? Math.max(0, totalReceived - total) : 0
+    
+    // 付款細項字串，確保傳到 GAS 也能看到各支付方式的實收
+    const paymentBreakdown = Object.entries(paymentAmounts)
+      .map(([method, amt]) => `${method}:${Number(amt || 0)}`)
+      .join('; ')
+
     const payload = {
+      orderID,                              // 訂單編號
+      timestamp: now.toISOString(),         // 用於前端顯示和 Sheet 第一列（時間）
       user,
       items: itemsForPayload,
       subtotal,
       discountAmount,
-      discountType: discount ? discount.type : null,
-      promoCode: discount ? promoCode.trim().toUpperCase() : '',
       total,
-      paymentMethod,
-      timestamp: new Date().toISOString()
+      paymentMethod: paymentBreakdown || Object.keys(paymentAmounts).join(', '), // 兼容舊欄位，含金額
+      paymentAmounts,                       // 各付款方式的金額明細（物件）
+      receivedAmount: totalReceived,        // 總收取金額
+      changeAmount,                         // 找續金額
+      promoCode: discount ? promoCode.trim().toUpperCase() : '',
+      deletedBy: null,    // 初始未刪除
+      deletedAt: null     // 初始未刪除
     }
 
     // 立即更新本地狀態（不等待網路回應）
-    alert('已送出訂單!')
-    setOrders((prev) => [...prev, payload])
+    pushToast('已送出訂單！', 'success')
+    
+    // 記錄最近提交的訂單（給予 2 分鐘上傳寬限期）
+    recentSubmissionsRef.current.set(orderID, Date.now())
+    
+    // 批量更新狀態，使用 startTransition 降低更新優先級
+    startTransition(() => {
+      setOrders((prev) => [...prev, payload])
+    })
+    
+    // 立即清空購物車（高優先級，使用者立即感知）
     setCart([])
     setDiscount(null)
     setPromoCode('')
     setPromoMessage('')
+    setPaymentAmounts({})
 
     // 異步在背景傳送到 Google Apps Script（不阻擋 UI）
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyPIeUwfSrcA6r_ULVVVzITfsJj02-CUaWeGLxQK8IfKZZTkjy6uCZQoCxTko2gv_Qf/exec'
+    // GAS_URL from config
     fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
@@ -239,6 +432,7 @@ export default function App() {
       body: JSON.stringify(payload)
     }).catch(err => {
       console.error('背景上傳 Google Sheet 失敗:', err)
+      pushToast('訂單已送出，本機保留；雲端暫時失敗', 'error')
     })
   }
 
@@ -256,32 +450,111 @@ export default function App() {
   // 訂單記錄頁面
   if (currentPage === 'history') {
     const handleDeleteOrder = (index) => {
+      const orderToDelete = orders[index]
+      if (!orderToDelete) return
+
+      const deletedAt = new Date().toISOString()
+      
+      // 更新本地狀態
       setOrders((prev) => {
         const newOrders = [...prev]
-        newOrders[index] = { ...newOrders[index], deleted: true, deletedBy: user, deletedAt: new Date().toISOString() }
+        newOrders[index] = { ...newOrders[index], deleted: true, deletedBy: user, deletedAt }
         return newOrders
+      })
+
+      // 同步到 Google Sheet，使用 orderID 找到對應行更新刪除者資訊
+      const deletePayload = {
+        action: 'delete',
+        orderID: orderToDelete.orderID || computeOrderID(orderToDelete.timestamp),
+        deletedBy: user,
+        deletedAt
+      }
+
+      fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(deletePayload)
+      }).catch(err => {
+        console.error('同步刪除狀態到 Google Sheet 失敗:', err)
+        pushToast('刪除已標記，本機完成；雲端同步失敗', 'error')
       })
     }
 
-    const handleSettleOrders = (indicesToSettle) => {
-      // collect settled orders from current orders
+    const sendSettlementToGas = async (settledOrders, note = '') => {
+      const ts = new Date().toISOString()
+      const batchId = computeSettlementID(ts)
+      const subtotalSum = settledOrders.reduce((s, o) => s + Number(o.subtotal || 0), 0)
+      const discountSum = settledOrders.reduce((s, o) => s + Number(o.discountAmount || 0), 0)
+      const totalSum = settledOrders.reduce((s, o) => s + Number(o.total || 0), 0)
+
+      const payload = {
+        action: 'settlement',
+        batchId,
+        user,
+        count: settledOrders.length,
+        subtotalSum,
+        discountSum,
+        totalSum,
+        note,
+        orders: settledOrders
+      }
+
+      // 同步刪除狀態（可選）：把本地被標記 deleted 的訂單上傳 GAS
+      const deletedOrders = settledOrders.filter(o => o.deleted || o.deletedAt)
+      deletedOrders.forEach(o => {
+        const delPayload = {
+          action: 'delete',
+          orderID: o.orderID || computeOrderID(o.timestamp),
+          deletedBy: o.deletedBy || user,
+          deletedAt: o.deletedAt || ts
+        }
+        fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(delPayload)
+        }).catch(() => {})
+      })
+
+      // 送 Settlement 到 GAS（no-cors 背景）
+      fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      }).catch(err => console.warn('結算上傳失敗', err))
+
+      return { batchId }
+    }
+
+    const handleSettleOrders = async (indicesToSettle) => {
       const settled = indicesToSettle.map(i => orders[i]).filter(Boolean)
       if (settled.length === 0) return
-      // archive settled orders
+
+      await sendSettlementToGas(settled)
+
+      // archive locally
       setArchives((prev) => [...prev, { id: Date.now(), timestamp: new Date().toISOString(), orders: settled }])
-      // remove settled orders from active orders so they no longer show
-      setOrders((prev) => prev.filter((_, idx) => !indicesToSettle.includes(idx)))
+      // remove settled orders from active orders
+      const remaining = orders.filter((_, idx) => !indicesToSettle.includes(idx))
+      setOrders(remaining)
+      saveOrdersToLocal(remaining)
     }
 
-    const handleSettleAllOrders = () => {
-      // archive all orders (including ones marked deleted) and clear the orders list
+    const handleSettleAllOrders = async () => {
       if (!orders || orders.length === 0) return
       const all = [...orders]
+
+      await sendSettlementToGas(all)
+
+      // archive and clear locally
       setArchives((prev) => [...prev, { id: Date.now(), timestamp: new Date().toISOString(), orders: all }])
       setOrders([])
+      saveOrdersToLocal([])
     }
 
-    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} />
+    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} syncFailedOrders={syncFailedOrders} />
   }
 
   // 菜單與購物車頁面
@@ -296,23 +569,12 @@ export default function App() {
       </div>
       {/* <div className="debug">DEBUG: user={String(user)} subtotal={subtotal} items={cart.length} discountAmount={discount ? (discount.type==='percent'?Math.round(subtotal*(discount.value/100)):discount.value):0}</div> */}
 
+      {/* Toasts */}
+      <ToastContainer toasts={toasts} />
+
       <div className="layout">
         {/* 左邊：格狀菜單 */}
-        <div className="column">
-          <h3 className="section-title">菜單</h3>
-          <div className="menu-grid">
-            {menu.map(item => (
-              <div
-                key={item.id}
-                className="menu-card"
-                onClick={() => openCustomization(item)}  // 整個卡片可點
-              >
-                <div className="menu-card-name">{item.name}</div>
-                <div className="menu-card-price">${item.price}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <Menu onAddItem={handleAddItem} />
 
         {/* 右邊：購物車 */}
         <div className="column">
@@ -324,7 +586,7 @@ export default function App() {
               {cart.map((entry, index) => (
                 <li key={index} className="cart-item">
                   <span>
-                    {entry.item.name} - ${entry.item.price} × {entry.quantity}<br />
+                    {entry.item.name} x{entry.quantity} • ${entry.item.price}<br />
                     <small>{entry.sweetness} ・ {entry.ice}</small>
                   </span>
                   <div className="quantity-controls">
@@ -340,30 +602,21 @@ export default function App() {
           <div className="checkout-box">
             <div>小計: ${subtotal}</div>
 
-            <div className="form-row">
-              <label>折扣代碼</label>
-              <select value={promoCode} onChange={(e) => setPromoCode(e.target.value)}>
-                <option value="">-- 選擇 --</option>
-                {Object.keys(promoOptions).map(code => {
-                  const opt = promoOptions[code]
-                  const desc = opt.type === 'percent' ? `${opt.value}% off` : `減 $${opt.value}`
-                  return <option key={code} value={code}>{code} - {desc}</option>
-                })}
-              </select>
-              <button className="btn-apply" type="button" onClick={applyPromoCode}>套用</button>
-            </div>
-            {promoMessage && (
-              <div className={`message ${discount ? 'success' : 'error'}`}>{promoMessage}</div>
-            )}
+            <PromoSelector
+              selectedPromo={promoCode}
+              onPromoChange={({ code, discount, message }) => {
+                setPromoCode(code)
+                setDiscount(discount)
+                setPromoMessage(message)
+              }}
+              message={promoMessage}
+            />
 
-            <div className="form-row">
-              <label>付款方式</label>
-              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-                <option value="cash">現金</option>
-                <option value="card">信用卡</option>
-                <option value="linepay">Line Pay</option>
-              </select>
-            </div>
+            <PaymentSelector
+              paymentAmounts={paymentAmounts}
+              onPaymentAmountsChange={setPaymentAmounts}
+              total={total}
+            />
 
             <div className="total">總計: ${total}</div>
             <button className="btn-submit" onClick={submitOrder}>送出訂單</button>
@@ -371,49 +624,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* 客製化彈出視窗 */}
-      {selectedItem && (
-        <div className="modal-overlay" onClick={() => setSelectedItem(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">{selectedItem.name} - ${selectedItem.price}</div>
-
-            <div className="options-group">
-              <div className="options-title">甜度</div>
-              <div className="options-buttons">
-                {['無糖', '少糖', '半糖', '正常糖'].map(opt => (
-                  <button
-                    key={opt}
-                    className={`option-btn ${sweetness === opt ? 'selected' : ''}`}
-                    onClick={() => setSweetness(opt)}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="options-group">
-              <div className="options-title">冰塊</div>
-              <div className="options-buttons">
-                {['去冰', '少冰', '正常冰'].map(opt => (
-                  <button
-                    key={opt}
-                    className={`option-btn ${ice === opt ? 'selected' : ''}`}
-                    onClick={() => setIce(opt)}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="modal-buttons">
-              <button className="modal-btn-cancel" onClick={() => setSelectedItem(null)}>取消</button>
-              <button className="modal-btn-add" onClick={addToCartWithOptions}>加入購物車</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
