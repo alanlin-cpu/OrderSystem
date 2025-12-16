@@ -225,6 +225,37 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
     
+    // 處理獲取已結算訂單ID請求
+    if (action === 'getSettledOrderIDs') {
+      const settledOrderIDs = [];
+      
+      // 讀取 Settlement 表，取得所有批次ID
+      const settlementSheet = ss.getSheetByName('Settlement');
+      if (settlementSheet) {
+        const settlementValues = settlementSheet.getDataRange().getValues();
+        // 從第2列開始（跳過表頭），第2欄是批次ID
+        for (let i = 1; i < settlementValues.length; i++) {
+          const batchId = String(settlementValues[i][1] || '').trim();
+          if (!batchId) continue;
+          
+          // 讀取對應的批次明細工作表
+          const detailSheet = ss.getSheetByName(batchId);
+          if (detailSheet) {
+            const detailValues = detailSheet.getDataRange().getValues();
+            // 從第2列開始（跳過表頭），第2欄是訂單編號
+            for (let j = 1; j < detailValues.length; j++) {
+              const orderID = String(detailValues[j][1] || '').trim();
+              if (orderID) settledOrderIDs.push(orderID);
+            }
+          }
+        }
+      }
+      
+      return ContentService
+        .createTextOutput(JSON.stringify({ settledOrderIDs }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
     const sheet = ss.getSheetByName(ORDERS_SHEET);
     if (!sheet) {
       return ContentService

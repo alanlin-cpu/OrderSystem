@@ -67,11 +67,22 @@ export default function App() {
         setOrders(savedOrders)
       } else {
         // 若本地沒有訂單，優先嘗試從 Apps Script API (doGet) 載入，失敗則退回 gviz
+        // 初始載入時不使用 processSyncResult，直接設置訂單
         (async () => {
           try {
-            await loadOrdersFromApi()
+            const { remoteIDs, remoteOrders } = await loadOrdersFromApi()
+            if (remoteOrders && remoteOrders.length > 0) {
+              setOrders(remoteOrders)
+            }
           } catch (_) {
-            loadOrdersFromSheet()
+            try {
+              const { remoteIDs, remoteOrders } = await loadOrdersFromSheet()
+              if (remoteOrders && remoteOrders.length > 0) {
+                setOrders(remoteOrders)
+              }
+            } catch (e) {
+              console.warn('初始載入訂單失敗', e)
+            }
           }
         })()
       }
@@ -193,75 +204,103 @@ export default function App() {
       }
     })
 
-    // 合併遠端訂單：更新已存在的，新增不存在的；排除已結算（archives）
-    const archivedIDs = getArchivedIDs()
-    const incoming = list.filter(o => o.orderID && !archivedIDs.has(o.orderID))
-    if (incoming.length === 0) return remoteIDs
-
-    setOrders((prev) => {
-      const merged = [...prev]
-      incoming.forEach(o => {
-        const idx = merged.findIndex(x => x.orderID === o.orderID)
-        if (idx >= 0) merged[idx] = { ...merged[idx], ...o }
-        else merged.push(o)
-      })
-      return merged
-    })
-    return remoteIDs
+    // 記錄遠端訂單到 state（由 handleManualSync 統一處理合併）
+    return { remoteIDs, remoteOrders: list }
   }
 
 
-  // 共用的同步邏輯：更新 syncFailedOrders 並清理已結算訂單
-  const processSyncResult = (remoteIDs, prevOrders) => {
+  // 共用的同步邏輯：合併遠端訂單、更新 syncFailedOrders、處理已結算訂單
+  const processSyncResult = (remoteIDs = new Set(), remoteOrders = [], prevOrders = [], settledIDs = new Set()) => {
     const now = Date.now()
     const recentSubmissions = recentSubmissionsRef.current
+    
+    // 防禦性檢查
+    if (!Array.isArray(remoteOrders)) remoteOrders = []
+    if (!Array.isArray(prevOrders)) prevOrders = []
     
     // 清理過期的最近提交記錄（超過 2 分鐘）
     for (const [id, timestamp] of recentSubmissions.entries()) {
       if (now - timestamp > 120000) recentSubmissions.delete(id) // 2 分鐘 = 120000ms
     }
     
-    const localIDs = new Set(prevOrders.map(o => o.orderID).filter(Boolean))
+    const archivedIDs = getArchivedIDs()
+    
+    // 步驟1：處理已在遠端結算的訂單（在其他裝置結算）
+    const ordersToArchive = prevOrders.filter(o => settledIDs.has(o.orderID))
+    if (ordersToArchive.length > 0) {
+      setArchives(prev => [...prev, {
+        id: Date.now(),
+        timestamp: new Date().toISOString(),
+        orders: ordersToArchive,
+        note: '從其他裝置同步的已結算訂單'
+      }])
+      pushToast(`已自動歸檔 ${ordersToArchive.length} 筆其他裝置結算的訂單`, 'info', 3000)
+    }
+    
+    // 步驟2：合併遠端訂單到本地
+    // 排除：已歸檔的訂單、已在遠端結算的訂單
+    const incomingOrders = remoteOrders.filter(o => 
+      o.orderID && 
+      !archivedIDs.has(o.orderID) && 
+      !settledIDs.has(o.orderID)
+    )
+    
+    let merged = [...prevOrders.filter(o => !settledIDs.has(o.orderID))]
+    
+    // 合併邏輯：遠端有的訂單更新/新增到本地
+    incomingOrders.forEach(remoteOrder => {
+      const idx = merged.findIndex(localOrder => localOrder.orderID === remoteOrder.orderID)
+      if (idx >= 0) {
+        // 本地已存在，用遠端數據更新（遠端為準）
+        merged[idx] = { ...merged[idx], ...remoteOrder }
+      } else {
+        // 本地沒有，新增（情況2：其他裝置提交的訂單）
+        merged.push(remoteOrder)
+      }
+    })
+    
+    // 步驟3：計算同步失敗的訂單
+    // 本地有但遠端沒有 + 不在寬限期 + 不在已結算列表 = 同步失敗
+    const localIDs = new Set(merged.map(o => o.orderID).filter(Boolean))
     const nextFailed = new Set()
     
-    // 計算同步失敗的訂單，但排除最近 2 分鐘內提交的（給予上傳寬限期）
     localIDs.forEach(id => { 
-      if (!remoteIDs.has(id) && !recentSubmissions.has(id)) {
+      if (!remoteIDs.has(id) && !recentSubmissions.has(id) && !settledIDs.has(id)) {
         nextFailed.add(id)
       }
     })
     setSyncFailedOrders(nextFailed)
     
-    // 自動清理：本地有但遠端沒有 → 已在其他裝置結算，刪除
-    if (nextFailed.size === 0) return prevOrders
-    
-    const archivedIDs = getArchivedIDs()
-    
-    const remaining = prevOrders.filter(o => {
-      const id = o.orderID || computeOrderID(o.timestamp)
-      // 保留條件：1) 遠端有 2) 本會話已結算 3) 最近 2 分鐘內提交（給予上傳寬限期）
-      if (!nextFailed.has(id)) return true
-      if (archivedIDs.has(id)) return true
-      if (recentSubmissions.has(id)) return true
-      return false
-    })
-    
-    if (remaining.length !== prevOrders.length) {
-      saveOrdersToLocal(remaining)
-      return remaining
+    // 步驟4：儲存並返回結果
+    if (merged.length !== prevOrders.length || ordersToArchive.length > 0) {
+      saveOrdersToLocal(merged)
     }
-    return prevOrders
+    
+    return merged
   }
 
   const handleManualSync = async () => {
     try {
-      const remoteIDs = await loadOrdersFromApi()
-      setOrders(prev => processSyncResult(remoteIDs, prev))
+      // 步驟1：獲取遠端訂單
+      const { remoteIDs, remoteOrders } = await loadOrdersFromApi()
+      
+      // 步驟2：獲取已結算訂單ID
+      let settledIDs = new Set()
+      try {
+        const settledResponse = await fetch(`${GAS_URL}?action=getSettledOrderIDs`)
+        const settledData = await settledResponse.json()
+        settledIDs = new Set(settledData.settledOrderIDs || [])
+      } catch (err) {
+        console.warn('獲取已結算訂單ID失敗', err)
+      }
+      
+      // 步驟3：處理同步結果
+      setOrders(prev => processSyncResult(remoteIDs, remoteOrders, prev, settledIDs))
     } catch (err) {
       console.warn('doGet 同步失敗，嘗試 gviz fallback', err)
       try {
-        const remoteIDs = await loadOrdersFromSheet()
-        setOrders(prev => processSyncResult(remoteIDs, prev))
+        const { remoteIDs, remoteOrders } = await loadOrdersFromSheet()
+        setOrders(prev => processSyncResult(remoteIDs, remoteOrders, prev, new Set()))
       } catch (err2) {
         console.warn('同步失敗', err2)
       }
@@ -580,7 +619,35 @@ export default function App() {
       saveOrdersToLocal([])
     }
 
-    return <OrderHistory orders={orders} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} syncFailedOrders={syncFailedOrders} />
+    const handleRetryUpload = async (index) => {
+      const orderToRetry = orders[index]
+      if (!orderToRetry) return
+
+      pushToast('重新上傳中...', 'info', 2000)
+
+      try {
+        const response = await fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(orderToRetry)
+        })
+        
+        // 從失敗列表中移除
+        setSyncFailedOrders(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(orderToRetry.orderID)
+          return newSet
+        })
+        
+        pushToast('重新上傳成功！', 'success')
+      } catch (err) {
+        console.error('重新上傳失敗:', err)
+        pushToast('重新上傳失敗，請稍後再試', 'error', 4000)
+      }
+    }
+
+    return <OrderHistory orders={orders} user={user} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} onRetryUpload={handleRetryUpload} syncFailedOrders={syncFailedOrders} />
   }
 
   // 菜單與購物車頁面

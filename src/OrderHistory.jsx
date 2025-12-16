@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react'
 import ConfirmDialog from './components/ConfirmDialog'
 
-export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders, syncFailedOrders = new Set() }) {
+export default function OrderHistory({ orders, user, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders, onRetryUpload, syncFailedOrders = new Set() }) {
   const [searchUser, setSearchUser] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
   const [settleOpen, setSettleOpen] = useState(false)
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null)
+  const [isSettling, setIsSettling] = useState(false)
+  const [retryingOrders, setRetryingOrders] = useState(new Set())
 
   const isDeleted = (o) => o.deleted || !!o.deletedAt
 
@@ -149,7 +151,31 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
                   </td>
                   <td className="actions">
                     {!isDeleted(order) && (
-                      <button className="btn-delete" onClick={() => deleteOrder(idx)}>🗑 刪除</button>
+                      <>
+                        {user === 'admin' && syncFailedOrders.has(order.orderID) && (
+                          <button 
+                            className="btn-retry" 
+                            onClick={async () => {
+                              const orderID = order.orderID
+                              if (retryingOrders.has(orderID)) return
+                              setRetryingOrders(prev => new Set(prev).add(orderID))
+                              try {
+                                await onRetryUpload(idx)
+                              } finally {
+                                setRetryingOrders(prev => {
+                                  const next = new Set(prev)
+                                  next.delete(orderID)
+                                  return next
+                                })
+                              }
+                            }}
+                            disabled={retryingOrders.has(order.orderID)}
+                          >
+                            {retryingOrders.has(order.orderID) ? '上傳中...' : '🔄 重新上傳'}
+                          </button>
+                        )}
+                        <button className="btn-delete" onClick={() => deleteOrder(idx)}>🗑 刪除</button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -185,7 +211,13 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
         </div>
       )}
       <div style={{marginTop:20}}>
-        <button className="btn-settle" onClick={() => setSettleOpen(true)}>🔔 結算</button>
+        <button 
+          className="btn-settle" 
+          onClick={() => setSettleOpen(true)}
+          disabled={isSettling}
+        >
+          {isSettling ? '結算處理中...' : '🔔 結算'}
+        </button>
       </div>
 
       {/* 結算 Modal */}
@@ -277,8 +309,25 @@ export default function OrderHistory({ orders, onBack, onDeleteOrder, onSettleOr
             </div>
 
             <div style={{display:'flex',gap:12,justifyContent:'flex-end',marginTop:18}}>
-              <button className="btn-cancel" onClick={() => setSettleOpen(false)}>取消</button>
-              <button className="btn-save" onClick={() => { onSettleAllOrders && onSettleAllOrders(); setSettleOpen(false) }}>確認結算並刪除全部訂單</button>
+              <button className="btn-cancel" onClick={() => setSettleOpen(false)} disabled={isSettling}>取消</button>
+              <button 
+                className="btn-save" 
+                onClick={async () => {
+                  if (isSettling) return
+                  setIsSettling(true)
+                  try {
+                    await onSettleAllOrders()
+                    setSettleOpen(false)
+                  } catch (err) {
+                    console.error('結算失敗:', err)
+                  } finally {
+                    setIsSettling(false)
+                  }
+                }}
+                disabled={isSettling}
+              >
+                {isSettling ? '處理中...' : '確認結算並刪除全部訂單'}
+              </button>
             </div>
           </div>
         </div>
