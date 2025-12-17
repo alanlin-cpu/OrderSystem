@@ -555,6 +555,15 @@ export default function App() {
       const discountSum = settledOrders.reduce((s, o) => s + Number(o.discountAmount || 0), 0)
       const totalSum = settledOrders.reduce((s, o) => s + Number(o.total || 0), 0)
 
+      // 計算產品銷量
+      const productCounts = {}
+      settledOrders.forEach(o => {
+        o.items.forEach(it => {
+          productCounts[it.name] = (productCounts[it.name] || 0) + (it.quantity || 1)
+        })
+      })
+      const sortedProducts = Object.entries(productCounts).sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+
       const payload = {
         action: 'settlement',
         batchId,
@@ -564,7 +573,8 @@ export default function App() {
         discountSum,
         totalSum,
         note,
-        orders: settledOrders
+        orders: settledOrders,
+        productCounts: sortedProducts  // 新增：產品銷量列表
       }
 
       // 同步刪除狀態（可選）：把本地被標記 deleted 的訂單上傳 GAS

@@ -72,6 +72,24 @@ function doPost(e) {
         ]);
       });
 
+      // 寫入產品銷量表到第 13 欄（M 欄）開始
+      const productCounts = payload.productCounts || [];
+      if (productCounts.length > 0) {
+        // M1: "產品", N1: "數量"
+        detailSheet.getRange(1, 13).setValue('產品');
+        detailSheet.getRange(1, 14).setValue('數量');
+        
+        // M2, M3, ... : 產品名稱
+        // N2, N3, ... : 數量
+        productCounts.forEach((item, idx) => {
+          const row = idx + 2;  // 從第 2 列開始
+          const productName = String(item[0] || '');
+          const count = Number(item[1] || 0);
+          detailSheet.getRange(row, 13).setValue(productName);
+          detailSheet.getRange(row, 14).setValue(count);
+        });
+      }
+
       // 清空 orders 工作表內容（保留表頭第1列）
       const ordersSheet = ss.getSheetByName(ORDERS_SHEET) || ss.insertSheet(ORDERS_SHEET);
       const lastRow = ordersSheet.getLastRow();
