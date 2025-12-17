@@ -432,12 +432,14 @@ export default function App() {
       return
     }
 
-    const itemsForPayload = cart.map(entry => ({
-      ...entry.item,
-      quantity: entry.quantity,
-      sweetness: entry.sweetness,
-      ice: entry.ice
-    }))
+    const itemsForPayload = cart
+      .map(entry => ({
+        ...entry.item,
+        quantity: entry.quantity,
+        sweetness: entry.sweetness,
+        ice: entry.ice
+      }))
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
 
     // 生成訂單編號：精確到毫秒 (YYYYMMDDHHMMSSmmm)
     const now = new Date()
