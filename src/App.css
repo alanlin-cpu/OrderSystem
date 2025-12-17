@@ -627,26 +627,64 @@
   align-items: flex-start;
   flex-wrap: wrap;
 }
-.settle-left { flex: 1; min-width: 260px }
-.settle-right { width: 320px; flex-shrink: 0 }
+.settle-left { flex: 0 0 auto; width: 200px }
+.settle-right { flex: 1; min-width: 280px }
 
 /* settle table polish */
-.settle-table thead th { background: #fafafa; font-weight: 700 }
+.settle-table { font-size: 0.9em }
+.settle-table thead th { background: #fafafa; font-weight: 700; padding: 6px 8px }
 .settle-table tbody tr:nth-child(odd) { background: #fff }
 .settle-table tbody tr:nth-child(even) { background: #fbfbfb }
-.settle-table td, .settle-table th { border: 1px solid #efefef }
+.settle-table td, .settle-table th { border: 1px solid #efefef; padding: 4px 6px }
 .settle-table { box-shadow: none }
 
-/* make bar labels wrap and align */
-.bar-row { display:flex; align-items:center; gap:8px }
-.bar-label { width:110px; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-
-/* bar chart */
-.bar-chart { display:flex; flex-direction:column; gap:8px }
-.bar-row { display:flex; align-items:center; gap:8px }
-.bar-label { width:80px; font-size:0.9em }
-.bar-wrap { flex:1; background:#eee; border-radius:6px; overflow:hidden }
-.bar { background:linear-gradient(90deg,#4caf50,#81c784); color:white; padding:6px 8px; white-space:nowrap }
+/* bar chart - horizontal bar style */
+.bar-chart { 
+  display: flex; 
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  background: #fafafa;
+}
+.bar-row { 
+  display: flex; 
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.bar-label { 
+  font-size: 0.85em; 
+  width: 70px;
+  flex-shrink: 0;
+  font-weight: 500;
+  text-align: right;
+}
+.bar-wrap { 
+  flex: 1;
+  background: #e8e8e8;
+  border-radius: 4px;
+  overflow: hidden;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+}
+.bar { 
+  background: linear-gradient(90deg, #4caf50, #81c784);
+  color: white; 
+  padding: 0 8px;
+  font-size: 0.85em;
+  font-weight: bold;
+  border-radius: 4px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-width: 30px;
+}
 
 /* 搜尋與篩選 */
 .order-filters {

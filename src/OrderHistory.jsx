@@ -270,20 +270,27 @@ export default function OrderHistory({ orders, user, onBack, onDeleteOrder, onSe
               </div>
               <div className="settle-right">
                 <h4>銷量柱狀圖</h4>
-                <div className="bar-chart">
-                  {(() => {
-                    const { counts } = window._settlementCache || {}
-                    if (!counts) return null
-                    const entries = Object.entries(counts).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))
-                    const max = entries.reduce((m,[,v]) => Math.max(m,v), 1)
-                    return entries.map(([name, v]) => (
-                      <div className="bar-row" key={name}>
-                        <div className="bar-label">{name}</div>
-                        <div className="bar-wrap"><div className="bar" style={{width: `${(v/max)*100}%`}}>{v}</div></div>
-                      </div>
-                    ))
-                  })()}
-                </div>
+                {(() => {
+                  const { counts } = window._settlementCache || {}
+                  if (!counts) return null
+                  const entries = Object.entries(counts).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))
+                  const chartHeight = Math.max(200, entries.length * 40) // 每項40px，最少200px
+                  return (
+                    <div className="bar-chart" style={{height: `${chartHeight}px`}}>
+                      {(() => {
+                        const max = entries.reduce((m,[,v]) => Math.max(m,v), 1)
+                        return entries.map(([name, v]) => (
+                          <div className="bar-row" key={name}>
+                            <div className="bar-label">{name}</div>
+                            <div className="bar-wrap">
+                              <div className="bar" style={{width: `${(v/max)*100}%`}}>{v}</div>
+                            </div>
+                          </div>
+                        ))
+                      })()}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
 
