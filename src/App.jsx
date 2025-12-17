@@ -647,7 +647,22 @@ export default function App() {
       }
     }
 
-    return <OrderHistory orders={orders} user={user} onBack={() => setCurrentPage('menu')} onDeleteOrder={handleDeleteOrder} onSettleOrders={handleSettleOrders} onSettleAllOrders={handleSettleAllOrders} onRetryUpload={handleRetryUpload} syncFailedOrders={syncFailedOrders} />
+    return (
+      <>
+        <OrderHistory
+          orders={orders}
+          user={user}
+          onBack={() => setCurrentPage('menu')}
+          onDeleteOrder={handleDeleteOrder}
+          onSettleOrders={handleSettleOrders}
+          onSettleAllOrders={handleSettleAllOrders}
+          onRetryUpload={handleRetryUpload}
+          syncFailedOrders={syncFailedOrders}
+          pushToast={pushToast}
+        />
+        <ToastContainer toasts={toasts} />
+      </>
+    )
   }
 
   // 菜單與購物車頁面

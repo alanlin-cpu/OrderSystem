@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import ConfirmDialog from './components/ConfirmDialog'
 
-export default function OrderHistory({ orders, user, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders, onRetryUpload, syncFailedOrders = new Set() }) {
+export default function OrderHistory({ orders, user, onBack, onDeleteOrder, onSettleOrders, onSettleAllOrders, onRetryUpload, syncFailedOrders = new Set(), pushToast }) {
   const [searchUser, setSearchUser] = useState('')
   const [filterPayment, setFilterPayment] = useState('')
   const [settleOpen, setSettleOpen] = useState(false)
@@ -316,6 +316,9 @@ export default function OrderHistory({ orders, user, onBack, onDeleteOrder, onSe
                   if (isSettling) return
                   setIsSettling(true)
                   try {
+                    if (typeof pushToast === 'function') {
+                      pushToast('結算處理中...', 'info', 4000)
+                    }
                     await onSettleAllOrders()
                     setSettleOpen(false)
                   } catch (err) {
