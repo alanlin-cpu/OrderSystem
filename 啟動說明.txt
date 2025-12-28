@@ -1,0 +1,59 @@
+========================================
+  OrderSystem - Silent Print Mode
+  User Guide
+========================================
+
+SETUP STEPS:
+
+1. Set XP-80C as default printer
+   Windows Settings > Bluetooth & Devices > Printers
+   > Right click XP-80C > Set as default printer
+
+2. Start development server
+   Open terminal in project folder
+   Run: npm run dev
+
+3. Double click OrderSystem-Print.bat
+
+4. Chrome will auto-open the order system
+
+5. Submit orders - will auto-print to XP-80C (no dialogs)
+
+
+DEPLOYMENT:
+
+To use with production URL:
+1. Edit OrderSystem-Print.bat
+2. Replace: http://localhost:5173
+   With: https://your-domain.netlify.app
+
+
+ADVANCED SETTINGS:
+
+If printer name is not "XP-80C":
+1. Right click OrderSystem-Print.bat > Edit
+2. Find "XP-80C" text
+3. Replace with your actual printer name
+4. Save
+
+
+TIPS:
+
+- Copy OrderSystem-Print.bat to desktop for quick access
+- Create shortcut and customize icon
+- Add --kiosk parameter for fullscreen mode
+
+
+TROUBLESHOOTING:
+
+Q: Still shows print dialog?
+A: Make sure XP-80C is set as default printer
+
+Q: Printer not found?
+A: Check printer name in Windows settings
+
+Q: Chrome path error?
+A: Update Chrome path in .bat file if installed elsewhere
+
+
+========================================

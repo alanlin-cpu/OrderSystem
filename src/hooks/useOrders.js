@@ -9,6 +9,7 @@ import {
   deleteOrderInApi,
   sendSettlementToApi
 } from '../services/orderService'
+import { printOrderJSON, printOrderReadable } from '../utils/printOrder'
 
 /**
  * 訂單管理的自定義 Hook
@@ -230,6 +231,19 @@ export function useOrders(user, pushToast) {
       console.error('背景上傳 Google Sheet 失敗:', err)
       pushToast('訂單已送出，本機保留；雲端暫時失敗', 'error')
     }
+
+    // 🖨️ 自動列印訂單 (出餐時列印)
+    setTimeout(() => {
+      try {
+        // 列印可讀格式 (推薦)
+        printOrderReadable(payload)
+        // 若要改用 JSON 格式，取消下行註解並註解上行
+        // printOrderJSON(payload)
+      } catch (err) {
+        console.error('列印訂單失敗:', err)
+        pushToast('列印失敗，請手動列印', 'warning')
+      }
+    }, 500)
 
     return payload
   }

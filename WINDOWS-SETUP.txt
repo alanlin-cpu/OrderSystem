@@ -1,0 +1,50 @@
+========================================
+  IMPORTANT - Windows Setup Instructions
+========================================
+
+This .bat file is for WINDOWS only!
+It will NOT work in the Linux dev container.
+
+HOW TO USE ON WINDOWS 11:
+
+1. Download or copy these files to your Windows machine:
+   - OrderSystem-Print.bat
+   - The entire OrderSystem project
+
+2. On Windows, install Node.js if not already installed
+
+3. Open Command Prompt or PowerShell on Windows
+
+4. Navigate to the project folder:
+   cd C:\path\to\OrderSystem
+
+5. Install dependencies (first time only):
+   npm install
+
+6. Start the dev server:
+   npm run dev
+
+7. Set XP-80C as default printer:
+   Settings > Bluetooth & devices > Printers
+   > Click XP-80C > Set as default
+
+8. Double-click OrderSystem-Print.bat
+
+9. Chrome will open with silent printing enabled
+
+10. Test by submitting an order
+
+========================================
+
+ALTERNATIVE - Deploy to Production:
+
+1. Deploy the app to Netlify (see README.md)
+
+2. On Windows, edit OrderSystem-Print.bat
+
+3. Replace: http://localhost:5173
+   With: https://your-app.netlify.app
+
+4. Now you can use it without running npm
+
+========================================
