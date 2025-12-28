@@ -2,18 +2,16 @@ import React, { useState } from 'react'
 
 // 折扣選項配置
 export const promoOptions = {
-  A: { type: 'percent', value: 10 }, // 10% off
-  B: { type: 'percent', value: 20 }, // 20% off
-  C: { type: 'fixed', value: 20 },   // minus $20
-  D: { type: 'fixed', value: 30 },    // minus $30
+  '自拍第二set優惠': { type: 'fixed', value: 64.5 },    // minus $64.5
+  '兩部$170菲林折扣': { type: 'fixed', value: 20 }, 
   '送/廢': { type: 'percent', value: 100 } // 100% off
 }
 
 // 付款方式選項配置
 export const paymentOptions = [
   { value: 'cash', label: '現金', icon: '💵' },
-  { value: 'card', label: '信用卡', icon: '💳' },
-  { value: 'linepay', label: 'Line Pay', icon: '💲' }
+  { value: 'mpay', label: 'Mpay', icon: '💳' },
+  { value: 'code', label: 'Code', icon: '💲' }
 ]
 
 // 折扣選擇器組件
